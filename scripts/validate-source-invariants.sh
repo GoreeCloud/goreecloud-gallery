@@ -14,6 +14,8 @@ fail() {
 
 COMMONS_MAIN="$COMMONS_DIR/commons/src/main"
 CONFIG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt"
+POLICY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicy.kt"
+POLICY_TEST="$GALLERY_DIR/app/src/test/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicyTest.kt"
 FILE_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFileThumbnailStyleDialog.kt"
 FOLDER_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFolderThumbnailStyleDialog.kt"
 SETTINGS_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_settings.xml"
@@ -29,10 +31,20 @@ POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_
 ! grep -R -Fq "download the original one from www.fossify.org. Thanks" "$COMMONS_MAIN" \
   || fail "legacy Fossify download warning remains in Commons source"
 
-grep -Fq 'get() = false' "$CONFIG" \
-  || fail "expected GoreeCloud configuration invariant is missing"
-grep -Fq 'get() = FOLDER_STYLE_ROUNDED_CORNERS' "$CONFIG" \
-  || fail "rounded folder thumbnail default is missing"
+grep -Fq 'get() = GoreeCloudGalleryPolicy.CROP_THUMBNAILS' "$CONFIG" \
+  || fail "GoreeCloud crop policy is not wired into Config"
+grep -Fq 'get() = GoreeCloudGalleryPolicy.FOLDER_STYLE' "$CONFIG" \
+  || fail "GoreeCloud folder-style policy is not wired into Config"
+grep -Fq 'get() = GoreeCloudGalleryPolicy.FILE_ROUNDED_CORNERS' "$CONFIG" \
+  || fail "GoreeCloud file-corner policy is not wired into Config"
+grep -Fq 'const val CROP_THUMBNAILS = false' "$POLICY" \
+  || fail "uncropped thumbnail policy is missing"
+grep -Fq 'const val FILE_ROUNDED_CORNERS = true' "$POLICY" \
+  || fail "rounded file thumbnail policy is missing"
+grep -Fq 'const val FOLDER_STYLE = FOLDER_STYLE_ROUNDED_CORNERS' "$POLICY" \
+  || fail "rounded folder thumbnail policy is missing"
+grep -Fq 'class GoreeCloudGalleryPolicyTest' "$POLICY_TEST" \
+  || fail "GoreeCloud behavioral policy tests are missing"
 grep -Fq 'config.fileRoundedCorners = true' "$FILE_STYLE_DIALOG" \
   || fail "rounded file thumbnail enforcement is missing"
 grep -Fq 'val style = FOLDER_STYLE_ROUNDED_CORNERS' "$FOLDER_STYLE_DIALOG" \
