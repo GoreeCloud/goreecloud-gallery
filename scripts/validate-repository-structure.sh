@@ -8,6 +8,7 @@ fail() {
 
 required_files=(
   README.md
+  CHANGELOG.md
   LICENSE
   SECURITY.md
   CONTRIBUTING.md
@@ -49,6 +50,8 @@ grep -Fq 'com.goreecloud.gallery' README.md \
   || fail 'README does not record the application ID'
 grep -Fq 'Glaze UI' README.md \
   || fail 'README does not record the Glaze UI requirement'
+grep -Fq '1.0.0-gc.7' CHANGELOG.md \
+  || fail 'CHANGELOG does not record the current acceptance line'
 
 grep -Fq 'GNU GENERAL PUBLIC LICENSE' LICENSE \
   || fail 'root LICENSE is not the GNU GPL license text'
