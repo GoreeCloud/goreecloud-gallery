@@ -21,6 +21,7 @@ required_files=(
   .github/workflows/build-signed-release-candidate.yml
   docs/ARCHITECTURE.md
   docs/BUILD-AND-RELEASE.md
+  docs/GLAZE-UI.md
   docs/RELEASE-SIGNING.md
   docs/STABLE-RELEASE-CHECKLIST.md
   docs/RELEASE-EVIDENCE-TEMPLATE.md
@@ -38,8 +39,8 @@ for path in "${required_files[@]}"; do
   [ -s "$path" ] || fail "required file is missing or empty: $path"
 done
 
-for patch_line in gc1 gc2 gc3 gc4 gc5 gc6 gc7; do
-  [ -d "patches/$patch_line" ] || fail "required historical patch directory is missing: patches/$patch_line"
+for patch_line in gc1 gc2 gc3 gc4 gc5 gc6 gc7 gc8; do
+  [ -d "patches/$patch_line" ] || fail "required patch directory is missing: patches/$patch_line"
 done
 
 grep -Fq 'GoreeCloud Gallery' README.md \
@@ -70,6 +71,12 @@ grep -Fq 'Android user / profile boundary' docs/ARCHITECTURE.md \
   || fail 'architecture does not document Android user/profile isolation'
 grep -Fq 'Glaze UI architecture' docs/ARCHITECTURE.md \
   || fail 'architecture does not document the Glaze UI layer'
+grep -Fq 'GoreeCloud Gallery Glaze UI Contract' docs/GLAZE-UI.md \
+  || fail 'Glaze UI contract does not identify its Gallery scope'
+grep -Fq 'No permanent Glaze UI exception is approved' docs/GLAZE-UI.md \
+  || fail 'Glaze UI exception boundary is not documented'
+grep -Fq 'meaningful GoreeCloud-owned JVM tests actually execute' docs/GLAZE-UI.md \
+  || fail 'Glaze UI contract does not preserve behavioral-test evidence requirements'
 grep -Fq 'Disposable copied media used' docs/RELEASE-EVIDENCE-TEMPLATE.md \
   || fail 'release evidence template does not protect destructive-operation testing'
 grep -Fq 'Stable release: Not approved' docs/REPOSITORY-READINESS.md \
