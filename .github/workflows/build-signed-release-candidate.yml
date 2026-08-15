@@ -28,6 +28,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate repository security guardrails
+        run: bash scripts/validate-repository-security.sh
+
       - name: Set up Java 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
@@ -90,6 +93,7 @@ jobs:
           KEYSTORE="$RUNNER_TEMP/goreecloud-gallery-release.jks"
           ALIGNED="$RUNNER_TEMP/GoreeCloud-Gallery-aligned.apk"
           SIGNED="dist/GoreeCloud-Gallery-${EXPECTED_VERSION}.apk"
+          trap 'rm -f "$KEYSTORE" "$ALIGNED"' EXIT
 
           umask 077
           printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
@@ -103,8 +107,6 @@ jobs:
             --key-pass env:ANDROID_RELEASE_KEY_PASSWORD \
             --out "$SIGNED" \
             "$ALIGNED"
-
-          rm -f "$KEYSTORE" "$ALIGNED"
 
           CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-${EXPECTED_VERSION}.sha256" \
           EXPECTED_DEBUGGABLE=false \
