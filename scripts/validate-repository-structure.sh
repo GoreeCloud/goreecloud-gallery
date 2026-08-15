@@ -8,6 +8,7 @@ fail() {
 
 required_files=(
   README.md
+  LICENSE
   SECURITY.md
   CONTRIBUTING.md
   NOTICE.md
@@ -49,6 +50,10 @@ grep -Fq 'com.goreecloud.gallery' README.md \
 grep -Fq 'Glaze UI' README.md \
   || fail 'README does not record the Glaze UI requirement'
 
+grep -Fq 'GNU GENERAL PUBLIC LICENSE' LICENSE \
+  || fail 'root LICENSE is not the GNU GPL license text'
+grep -Fq 'Version 3, 29 June 2007' LICENSE \
+  || fail 'root LICENSE does not identify GNU GPL version 3'
 grep -Fq '@GoreeCloud' .github/CODEOWNERS \
   || fail 'CODEOWNERS does not identify GoreeCloud review ownership'
 grep -Fq 'GNU General Public License' NOTICE.md \
