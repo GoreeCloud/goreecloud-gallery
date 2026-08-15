@@ -151,17 +151,17 @@ jobs:
           mapfile -t apks < <(find upstream-gallery/app/build/outputs/apk/foss/debug -type f -name '*.apk' | sort)
           test "${#apks[@]}" -eq 1
 
-          APK="dist/GoreeCloud-Gallery-1.0.0-gc.7.apk"
+          APK="dist/GoreeCloud-Gallery-1.0.0.apk"
           cp "${apks[0]}" "$APK"
 
-          CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-1.0.0-gc.7.sha256" \
+          CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-1.0.0.sha256" \
           EXPECTED_DEBUGGABLE=true \
-            bash scripts/validate-apk.sh "$APK" 1.0.0-gc.7 2>&1 \
+            bash scripts/validate-apk.sh "$APK" 1.0.0 2>&1 \
             | tee dist/validation/apk-validation.txt
 
           bash scripts/write-build-evidence.sh \
             "$APK" \
-            1.0.0-gc.7 \
+            1.0.0 \
             acceptance-candidate \
             dist/validation/build-evidence.txt
 
@@ -188,7 +188,7 @@ jobs:
       - name: Upload acceptance artifact and validation evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: GoreeCloud-Gallery-acceptance-gc7
+          name: GoreeCloud-Gallery-1.0.0-acceptance-candidate
           path: dist/
           if-no-files-found: error
           retention-days: 30

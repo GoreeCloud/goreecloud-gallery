@@ -4,11 +4,11 @@ GoreeCloud Gallery is a GoreeCloud-maintained Android gallery application based 
 
 ## Status
 
-**Current packaged acceptance line:** `1.0.0-gc.7`
+**Current packaged candidate:** `1.0.0`
 
-**Current maintained reconstruction/test patch line:** `gc.8`
+**Current maintained reconstruction patch line:** `gc.9`
 
-The application remains an **Acceptance Candidate**, not a Stable production release. Real-device acceptance previously confirmed the gc.7 overflow-menu correction on both the main folders screen and an opened media folder, and the repository now also contains validated GoreeCloud-owned behavioral coverage for enforced thumbnail presentation policy.
+The application remains an **Acceptance Candidate**, not a Stable production release. The `1.0.0` semantic version is intentionally final so the exact signed and device-tested binary can later be promoted without rebuilding merely to change a version suffix.
 
 ## Product boundary
 
@@ -46,9 +46,9 @@ The build workflow checks out these exact commits before applying the ordered Go
 
 ## GoreeCloud patch chain
 
-The repository preserves deterministic gc.1 through gc.8 transformations under `patches/gc1/` through `patches/gc8/`. `scripts/materialize-patches.sh` reconstructs the maintained patch programs under generated `.build/patches/` and verifies preserved historical blob identities before execution.
+The repository preserves deterministic gc.1 through gc.9 transformations under `patches/gc1/` through `patches/gc9/`.
 
-The chain covers GoreeCloud package identity, branding, Glaze UI palette and surfaces, launcher behavior, upstream counterfeit-warning removal, rounded-thumbnail enforcement, settings/dialog refinements, popup contrast, the accepted gc.7 `MySearchMenu` toolbar overflow correction, and the gc.8 behavioral-test/policy foundation.
+The chain covers GoreeCloud package identity, branding, Glaze UI palette and surfaces, launcher behavior, upstream counterfeit-warning removal, rounded-thumbnail enforcement, settings/dialog refinements, popup contrast, the accepted gc.7 `MySearchMenu` toolbar overflow correction, the gc.8 behavioral-test/policy foundation, and gc.9 final `1.0.0` package identity.
 
 Each transformation is designed to fail closed when expected upstream source shape changes. Accepted historical patches are provenance; future behavior changes should extend the ordered patch line instead of rewriting accepted history.
 
@@ -57,7 +57,7 @@ Each transformation is designed to fail closed when expected upstream source sha
 ```text
 .github/        GitHub Actions, Dependabot, PR template, CODEOWNERS
 docs/           architecture, Glaze UI, build/release, signing, readiness and evidence
-patches/        preserved gc.1-gc.8 source transformations
+patches/        preserved gc.1-gc.9 source transformations
 scripts/        reconstruction, structure/security, source, APK, and evidence validation
 README.md       project entry point
 SECURITY.md     vulnerability and security boundary
@@ -73,13 +73,13 @@ GitHub Actions checks out the exact revision under review, validates repository 
 
 Behavioral-test validation is fail closed. CI requires JUnit XML proving `org.fossify.gallery.helpers.GoreeCloudGalleryPolicyTest` executed with at least three tests and zero failures/errors; a merely successful `NO-SOURCE` Gradle task is not accepted as behavioral coverage.
 
-The current validated suite protects GoreeCloud's enforced thumbnail behavior: thumbnails remain uncropped, file thumbnails remain rounded, and folder thumbnails remain rounded. This is intentionally focused pure-policy coverage; device-sensitive permission, file-operation, profile-isolation, accessibility, and lifecycle behavior remains subject to controlled real-device acceptance.
+The validated suite protects GoreeCloud's enforced thumbnail behavior: thumbnails remain uncropped, file thumbnails remain rounded, and folder thumbnails remain rounded. Device-sensitive permission, file-operation, profile-isolation, accessibility, lifecycle, and Glaze UI behavior remains subject to controlled real-device acceptance.
 
-Build-evidence schema v2 records both the exact validated repository checkout commit and the maintained GoreeCloud patch line separately from the packaged application version, preventing repository/test infrastructure provenance from being confused with APK semantic versioning.
+Build-evidence schema v2 records both the exact validated repository checkout commit and the maintained GoreeCloud patch line separately from the packaged application version.
 
 Third-party GitHub Actions used by the build are pinned to reviewed commit SHAs, checkout credentials are not persisted, and validation workflows retain read-only repository permissions.
 
-See `docs/BUILD-AND-RELEASE.md`, `docs/REPOSITORY-READINESS.md`, `docs/GLAZE-UI.md`, and `docs/RELEASE-EVIDENCE-TEMPLATE.md` for the full readiness model.
+See `docs/BUILD-AND-RELEASE.md`, `docs/REPOSITORY-READINESS.md`, `docs/GLAZE-UI.md`, `docs/STABLE-CANDIDATE-1.0.0.md`, and `docs/RELEASE-EVIDENCE-TEMPLATE.md` for the full readiness model.
 
 ## Release-signing foundation
 
@@ -87,11 +87,13 @@ A separate manual workflow, `.github/workflows/build-signed-release-candidate.ym
 
 The workflow does **not** publish Stable automatically. It validates repository/source controls and behavioral tests before building, aligning, signing, verifying, checking the approved signer fingerprint, and uploading a signed candidate with evidence for manual Stable acceptance.
 
-See `docs/RELEASE-SIGNING.md` and `docs/STABLE-RELEASE-CHECKLIST.md`.
+The final Stable release must reuse the exact accepted signed `1.0.0` binary. Any build-input or APK-content change creates a new candidate and invalidates affected acceptance evidence.
+
+See `docs/RELEASE-SIGNING.md`, `docs/STABLE-SIGNING-RUNBOOK.md`, and `docs/STABLE-RELEASE-CHECKLIST.md`.
 
 ## Stable-release work still required
 
-Meaningful GoreeCloud-owned behavioral coverage is now implemented and has passed exact-head CI. Stable promotion still requires:
+Source-controlled `1.0.0` acceptance is green, but Stable promotion still requires:
 
 - creation and protected recovery copies of the long-lived release key;
 - configuration and verification of the protected `stable-release` environment and signed-candidate workflow;
@@ -100,7 +102,7 @@ Meaningful GoreeCloud-owned behavioral coverage is now implemented and has passe
 - in-place upgrade and documented bad-release recovery validation using the long-lived signing identity;
 - final complete release evidence and deliberate Stable approval.
 
-Until those gates are complete, `1.0.0-gc.7` remains an Acceptance Candidate.
+Until those gates are complete, `1.0.0` remains an Acceptance Candidate or Signed Release Candidate, not Stable.
 
 ## Security and contribution guidance
 
