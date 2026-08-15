@@ -65,8 +65,16 @@ fi
 $APKSIGNER verify --verbose "$APK" >/dev/null \
   || fail "APK signature verification failed"
 
-signer_output="$($APKSIGNER verify --print-certs "$APK")"
-actual_cert_sha256="$(printf '%s\n' "$signer_output" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print tolower($2); exit}')"
+if ! signer_output="$($APKSIGNER verify --print-certs "$APK" 2>&1)"; then
+  fail "could not inspect APK signing certificate"
+fi
+
+actual_cert_sha256="$(
+  printf '%s\n' "$signer_output" \
+    | sed -nE 's/^[[:space:]]*Signer #[0-9]+ certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\1/p' \
+    | head -n 1 \
+    | tr '[:upper:]' '[:lower:]'
+)"
 [ -n "$actual_cert_sha256" ] || fail "could not read signer certificate SHA-256 digest"
 
 if [ -n "$EXPECTED_CERT_SHA256" ]; then
