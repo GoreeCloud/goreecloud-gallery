@@ -6,7 +6,7 @@ from pathlib import Path
 
 GALLERY_COMMIT = "b28299dc33821eee8d108a9880ce87876cf31443"
 COMMONS_COMMIT = "acfd352df1a1852d17a5f77def8b7ad6e522a5b6"
-VERSION_NAME, VERSION_CODE = "1.0.0-gc.8", "10008"
+VERSION_NAME, VERSION_CODE = "1.0.0-gc.7", "10007"
 
 def fail(msg): raise SystemExit(f"gc.8 patch failed: {msg}")
 def read(p):
