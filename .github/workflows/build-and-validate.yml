@@ -1,4 +1,4 @@
-name: Build and validate GoreeCloud Gallery gc.7
+name: GoreeCloud Gallery acceptance validation
 
 on:
   push:
@@ -33,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: goreecloud-gallery-gc7-${{ github.ref }}
+  group: goreecloud-gallery-acceptance-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -75,7 +75,7 @@ jobs:
       - name: Validate GoreeCloud source acceptance invariants
         run: bash scripts/validate-source-invariants.sh
 
-      - name: Run Android unit-test task and lint
+      - name: Run GoreeCloud behavioral tests and Android lint
         shell: bash
         working-directory: upstream-gallery
         run: |
@@ -86,22 +86,57 @@ jobs:
             | tee ../dist/validation/gradle-test-lint.log
 
           if grep -Fq '> Task :app:testFossDebugUnitTest NO-SOURCE' ../dist/validation/gradle-test-lint.log; then
-            cat > ../dist/validation/unit-test-coverage.txt <<'EOF'
-          task=:app:testFossDebugUnitTest
-          task_status=success
-          no_source=true
-          meaningful_behavioral_unit_tests_executed=false
-          interpretation=The upstream Gradle unit-test task succeeded but executed no unit-test sources. This is not behavioral test coverage.
-          EOF
-          else
-            cat > ../dist/validation/unit-test-coverage.txt <<'EOF'
-          task=:app:testFossDebugUnitTest
-          task_status=success
-          no_source=false
-          meaningful_behavioral_unit_tests_executed=review-test-report
-          interpretation=Unit-test sources were not reported as NO-SOURCE. Review retained test reports to confirm what executed.
-          EOF
+            printf '%s\n' 'GoreeCloud behavioral-test task unexpectedly reported NO-SOURCE.' >&2
+            exit 1
           fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          result_dir = Path('app/build/test-results/testFossDebugUnitTest')
+          xml_files = sorted(result_dir.glob('TEST-*.xml'))
+          if not xml_files:
+              raise SystemExit('No JUnit XML results were produced for testFossDebugUnitTest')
+
+          tests = failures = errors = skipped = 0
+          target_class = 'org.fossify.gallery.helpers.GoreeCloudGalleryPolicyTest'
+          target_seen = False
+          for path in xml_files:
+              root = ET.parse(path).getroot()
+              tests += int(root.attrib.get('tests', '0'))
+              failures += int(root.attrib.get('failures', '0'))
+              errors += int(root.attrib.get('errors', '0'))
+              skipped += int(root.attrib.get('skipped', '0'))
+              for case in root.iter('testcase'):
+                  if case.attrib.get('classname') == target_class:
+                      target_seen = True
+
+          if not target_seen:
+              raise SystemExit(f'Required GoreeCloud test class did not execute: {target_class}')
+          if tests < 3:
+              raise SystemExit(f'Expected at least 3 behavioral tests, observed {tests}')
+          if failures or errors:
+              raise SystemExit(f'Behavioral tests are not green: failures={failures}, errors={errors}')
+
+          evidence = Path('../dist/validation/unit-test-coverage.txt')
+          evidence.write_text(
+              '\n'.join([
+                  'task=:app:testFossDebugUnitTest',
+                  'task_status=success',
+                  'no_source=false',
+                  'meaningful_behavioral_unit_tests_executed=true',
+                  f'required_test_class={target_class}',
+                  f'tests={tests}',
+                  f'failures={failures}',
+                  f'errors={errors}',
+                  f'skipped={skipped}',
+                  'interpretation=JUnit XML proves GoreeCloud-owned behavioral tests executed successfully.',
+                  '',
+              ]),
+              encoding='utf-8',
+          )
+          PY
 
       - name: Build installable FOSS acceptance APK
         working-directory: upstream-gallery
@@ -142,6 +177,10 @@ jobs:
             cp -R upstream-gallery/app/build/reports/tests dist/validation/test-reports
           fi
 
+          if [ -d upstream-gallery/app/build/test-results ]; then
+            cp -R upstream-gallery/app/build/test-results dist/validation/test-results
+          fi
+
           if [ -f upstream-gallery/build/reports/problems/problems-report.html ]; then
             cp upstream-gallery/build/reports/problems/problems-report.html dist/validation/gradle-problems-report.html
           fi
@@ -149,7 +188,7 @@ jobs:
       - name: Upload acceptance artifact and validation evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: GoreeCloud-Gallery-gc7-APK
+          name: GoreeCloud-Gallery-acceptance-gc7
           path: dist/
           if-no-files-found: error
           retention-days: 30
