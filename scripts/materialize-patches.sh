@@ -19,17 +19,8 @@ materialize() {
       exit 1
     fi
 
-    # The GitHub line-range reads used during migration omit newline bytes at slice
-    # boundaries. Reconstruct those few known boundaries explicitly. The historical
-    # Git blob check below remains the authority.
     case "$gc" in
-      gc5)
-        test "${#fragments[@]}" -eq 2
-        cat "${fragments[0]}" > "$OUT_DIR/$output"
-        printf '\n' >> "$OUT_DIR/$output"
-        cat "${fragments[1]}" >> "$OUT_DIR/$output"
-        ;;
-      gc6)
+      gc5|gc6)
         test "${#fragments[@]}" -eq 2
         cat "${fragments[0]}" > "$OUT_DIR/$output"
         printf '\n' >> "$OUT_DIR/$output"
@@ -40,7 +31,6 @@ materialize() {
         ;;
     esac
 
-    # The final line-range read also omitted the source file's terminal newline.
     printf '\n' >> "$OUT_DIR/$output"
   fi
 
@@ -65,3 +55,4 @@ materialize gc5 build_goreecloud_gallery_gc5.py e8b1362e87d0e47997fa7f2ee36f851b
 materialize gc6 build_goreecloud_gallery_gc6.py 4c9094e7b4139e0472f1c17ab2ff4a2186244c78
 materialize gc7 build_goreecloud_gallery_gc7.py 516339487492806932ec14b669c183e4919b1187
 materialize gc8 build_goreecloud_gallery_gc8.py af2d061814c1066b42b91c64247db7bfce74ec61
+materialize gc9 build_goreecloud_gallery_gc9.py 99d6d251aac2a18fd597be660127084f525ea6b3
