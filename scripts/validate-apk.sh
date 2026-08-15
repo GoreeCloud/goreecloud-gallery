@@ -65,19 +65,23 @@ fi
 $APKSIGNER verify --verbose "$APK" >/dev/null \
   || fail "APK signature verification failed"
 
-if ! signer_output="$($APKSIGNER verify --print-certs "$APK" 2>&1)"; then
-  fail "could not inspect APK signing certificate"
-fi
-
-actual_cert_sha256="$(
-  printf '%s\n' "$signer_output" \
-    | sed -nE 's/^[[:space:]]*Signer #[0-9]+ certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+)[[:space:]]*$/\1/p' \
-    | head -n 1 \
-    | tr '[:upper:]' '[:lower:]'
-)"
-[ -n "$actual_cert_sha256" ] || fail "could not read signer certificate SHA-256 digest"
-
+actual_cert_sha256=""
 if [ -n "$EXPECTED_CERT_SHA256" ]; then
+  if ! signer_output="$($APKSIGNER verify --print-certs "$APK" 2>&1)"; then
+    fail "could not inspect APK signing certificate"
+  fi
+
+  cert_line="$(printf '%s\n' "$signer_output" | grep -i -m1 -E 'certificate.*sha-?256.*digest' || true)"
+  [ -n "$cert_line" ] || fail "could not find signer certificate SHA-256 digest"
+
+  actual_cert_sha256="$(
+    printf '%s\n' "$cert_line" \
+      | sed -E 's/^.*[Dd]igest:[[:space:]]*//' \
+      | tr -cd '0-9A-Fa-f:' \
+      | tr '[:upper:]' '[:lower:]'
+  )"
+  [ -n "$actual_cert_sha256" ] || fail "could not read signer certificate SHA-256 digest"
+
   normalized_expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
   normalized_actual="$(printf '%s' "$actual_cert_sha256" | tr -d ':[:space:]')"
   [ "$normalized_actual" = "$normalized_expected" ] \
@@ -108,5 +112,7 @@ done
 sha256sum "$APK" | tee "$CHECKSUM_OUTPUT"
 printf 'Application ID: %s\n' "$actual_application_id"
 printf 'Version: %s\n' "$actual_version"
-printf 'Signer certificate SHA-256: %s\n' "$actual_cert_sha256"
+if [ -n "$actual_cert_sha256" ]; then
+  printf 'Signer certificate SHA-256: %s\n' "$actual_cert_sha256"
+fi
 printf 'GoreeCloud Gallery APK validation passed.\n'
