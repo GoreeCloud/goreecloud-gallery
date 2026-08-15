@@ -30,7 +30,7 @@ while IFS= read -r use_target; do
     fail "third-party Action is not pinned to a 40-character commit SHA: $use_target"
   fi
 done < <(grep -R -h -E '^[[:space:]]*uses:[[:space:]]*[^[:space:]#]+' .github/workflows \
-  | sed -E 's/^[[:space:]]*uses:[[:space:]]*//')
+  | sed -E 's/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*$/\1/')
 
 mapfile -t secret_files < <(find . -path './.git' -prune -o -type f \( \
   -name '*.jks' -o \
