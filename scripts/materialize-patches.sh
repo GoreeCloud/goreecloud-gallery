@@ -35,6 +35,20 @@ s = s.replace(
 p.write_text(s)
 PY
       ;;
+    gc6)
+      python3 - "$OUT_DIR/$output" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace(
+    'tree.write(p, encoding="unicode", xml_declaration=True)\n\ndef notice(g):',
+    'tree.write(p, encoding="unicode", xml_declaration=True)\n\n\ndef notice(g):',
+    1,
+)
+p.write_text(s)
+PY
+      ;;
     gc7)
       python3 - "$OUT_DIR/$output" <<'PY'
 from pathlib import Path
