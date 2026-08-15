@@ -6,7 +6,7 @@ on:
       version:
         description: Expected GoreeCloud Gallery version name
         required: true
-        default: '1.0.0-gc.7'
+        default: '1.0.0'
         type: string
 
 permissions:
