@@ -1,0 +1,128 @@
+name: Build signed GoreeCloud Gallery release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Expected GoreeCloud Gallery version name
+        required: true
+        default: '1.0.0-gc.7'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: goreecloud-gallery-signed-release-candidate
+  cancel-in-progress: false
+
+jobs:
+  signed-release-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: stable-release
+
+    steps:
+      - name: Check out GoreeCloud Gallery
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Java 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Reconstruct exact GoreeCloud source
+        run: bash scripts/reconstruct-source.sh
+
+      - name: Validate GoreeCloud source acceptance invariants
+        run: bash scripts/validate-source-invariants.sh
+
+      - name: Run Android unit-test task and lint
+        working-directory: upstream-gallery
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:testFossReleaseUnitTest :app:lintFossRelease
+
+      - name: Build unsigned FOSS release APK
+        working-directory: upstream-gallery
+        run: ./gradlew --no-daemon --stacktrace :app:assembleFossRelease
+
+      - name: Validate release-signing secret boundary
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          : "${ANDROID_RELEASE_KEYSTORE_BASE64:?ANDROID_RELEASE_KEYSTORE_BASE64 is not configured}"
+          : "${ANDROID_RELEASE_KEYSTORE_PASSWORD:?ANDROID_RELEASE_KEYSTORE_PASSWORD is not configured}"
+          : "${ANDROID_RELEASE_KEY_ALIAS:?ANDROID_RELEASE_KEY_ALIAS is not configured}"
+          : "${ANDROID_RELEASE_KEY_PASSWORD:?ANDROID_RELEASE_KEY_PASSWORD is not configured}"
+          : "${ANDROID_RELEASE_CERT_SHA256:?ANDROID_RELEASE_CERT_SHA256 is not configured}"
+
+      - name: Align, sign, and validate release candidate
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ inputs.version }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist/validation
+          mapfile -t apks < <(find upstream-gallery/app/build/outputs/apk/foss/release -type f -name '*.apk' | sort)
+          test "${#apks[@]}" -eq 1
+
+          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$ZIPALIGN"
+          test -x "$APKSIGNER"
+
+          KEYSTORE="$RUNNER_TEMP/goreecloud-gallery-release.jks"
+          ALIGNED="$RUNNER_TEMP/GoreeCloud-Gallery-aligned.apk"
+          SIGNED="dist/GoreeCloud-Gallery-${EXPECTED_VERSION}.apk"
+
+          umask 077
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+          test -s "$KEYSTORE"
+
+          "$ZIPALIGN" -f -v 4 "${apks[0]}" "$ALIGNED"
+          "$APKSIGNER" sign \
+            --ks "$KEYSTORE" \
+            --ks-key-alias "$ANDROID_RELEASE_KEY_ALIAS" \
+            --ks-pass env:ANDROID_RELEASE_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_RELEASE_KEY_PASSWORD \
+            --out "$SIGNED" \
+            "$ALIGNED"
+
+          rm -f "$KEYSTORE" "$ALIGNED"
+
+          CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-${EXPECTED_VERSION}.sha256" \
+          EXPECTED_DEBUGGABLE=false \
+          EXPECTED_CERT_SHA256="$ANDROID_RELEASE_CERT_SHA256" \
+            bash scripts/validate-apk.sh "$SIGNED" "$EXPECTED_VERSION"
+
+          cp upstream-gallery/GOREECLOUD-NOTICE.md dist/GOREECLOUD-NOTICE.md
+          cp upstream-gallery/LICENSE dist/LICENSE-GPL-3.0.txt
+
+          if [ -d upstream-gallery/app/build/reports ]; then
+            find upstream-gallery/app/build/reports -maxdepth 1 -type f -name 'lint-results-fossRelease.*' \
+              -exec cp {} dist/validation/ \;
+          fi
+
+      - name: Upload signed release-candidate evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: GoreeCloud-Gallery-${{ inputs.version }}-signed-RC
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
