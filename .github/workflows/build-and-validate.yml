@@ -6,7 +6,7 @@ on:
     paths:
       - 'patches/**'
       - 'scripts/**'
-      - '.github/workflows/build-and-validate.yml'
+      - '.github/workflows/**'
       - 'README.md'
       - 'docs/**'
   pull_request:
@@ -14,7 +14,7 @@ on:
     paths:
       - 'patches/**'
       - 'scripts/**'
-      - '.github/workflows/build-and-validate.yml'
+      - '.github/workflows/**'
       - 'README.md'
       - 'docs/**'
   workflow_dispatch:
