@@ -23,6 +23,8 @@ required_files=(
   docs/BUILD-AND-RELEASE.md
   docs/GLAZE-UI.md
   docs/RELEASE-SIGNING.md
+  docs/STABLE-SIGNING-RUNBOOK.md
+  docs/REAL-DEVICE-ACCEPTANCE-RUNBOOK.md
   docs/STABLE-RELEASE-CHECKLIST.md
   docs/RELEASE-EVIDENCE-TEMPLATE.md
   docs/REPOSITORY-READINESS.md
@@ -77,6 +79,14 @@ grep -Fq 'No permanent Glaze UI exception is approved' docs/GLAZE-UI.md \
   || fail 'Glaze UI exception boundary is not documented'
 grep -Fq 'meaningful GoreeCloud-owned JVM tests actually execute' docs/GLAZE-UI.md \
   || fail 'Glaze UI contract does not preserve behavioral-test evidence requirements'
+grep -Fq 'GoreeCloud Gallery Stable Signing Runbook' docs/STABLE-SIGNING-RUNBOOK.md \
+  || fail 'stable signing runbook does not identify its Gallery scope'
+grep -Fq 'document the existence, purpose, owner, lifecycle, and validation of signing secrets without reproducing the active secret values' docs/STABLE-SIGNING-RUNBOOK.md \
+  || fail 'stable signing runbook does not preserve secret-separation requirements'
+grep -Fq 'GoreeCloud Gallery Real-Device Acceptance Runbook' docs/REAL-DEVICE-ACCEPTANCE-RUNBOOK.md \
+  || fail 'real-device acceptance runbook does not identify its Gallery scope'
+grep -Fq 'Glaze UI is mandatory for controlled Gallery surfaces' docs/REAL-DEVICE-ACCEPTANCE-RUNBOOK.md \
+  || fail 'real-device runbook does not preserve the Glaze UI acceptance boundary'
 grep -Fq 'Disposable copied media used' docs/RELEASE-EVIDENCE-TEMPLATE.md \
   || fail 'release evidence template does not protect destructive-operation testing'
 grep -Fq 'Stable release: Not approved' docs/REPOSITORY-READINESS.md \
