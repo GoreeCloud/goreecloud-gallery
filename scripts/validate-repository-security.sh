@@ -6,6 +6,12 @@ fail() {
   exit 1
 }
 
+mapfile -t shell_scripts < <(find scripts -maxdepth 1 -type f -name '*.sh' | sort)
+[ "${#shell_scripts[@]}" -ge 1 ] || fail "no GoreeCloud shell scripts found"
+for script in "${shell_scripts[@]}"; do
+  bash -n "$script" || fail "shell syntax check failed: $script"
+done
+
 mapfile -t workflow_files < <(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
 [ "${#workflow_files[@]}" -ge 1 ] || fail "no GitHub Actions workflows found"
 
