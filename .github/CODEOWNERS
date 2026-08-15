@@ -1,0 +1,13 @@
+# GoreeCloud Gallery review ownership
+* @GoreeCloud
+
+# Release, security, and repository governance
+/.github/ @GoreeCloud
+/docs/ @GoreeCloud
+/scripts/ @GoreeCloud
+/SECURITY.md @GoreeCloud
+/CONTRIBUTING.md @GoreeCloud
+/NOTICE.md @GoreeCloud
+
+# Historical GoreeCloud source transformations
+/patches/ @GoreeCloud
