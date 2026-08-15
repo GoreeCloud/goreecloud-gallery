@@ -18,9 +18,11 @@ NOTICE="$GALLERY_DIR/GOREECLOUD-NOTICE.md"
 CONFIG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt"
 POLICY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicy.kt"
 POLICY_TEST="$GALLERY_DIR/app/src/test/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicyTest.kt"
+SETTINGS_ACTIVITY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/activities/SettingsActivity.kt"
 FILE_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFileThumbnailStyleDialog.kt"
 FOLDER_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFolderThumbnailStyleDialog.kt"
 SETTINGS_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_settings.xml"
+SETTINGS_STRINGS="$GALLERY_DIR/app/src/main/res/values/strings.xml"
 FILE_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_file_thumbnail_style.xml"
 FOLDER_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_folder_thumbnail_style.xml"
 SEARCH_MENU="$COMMONS_DIR/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt"
@@ -28,10 +30,11 @@ SEARCH_LAYOUT="$COMMONS_DIR/commons/src/main/res/layout/menu_search.xml"
 POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml"
 POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
 
-grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Stable-candidate version name is not 1.0.0"
-grep -Fqx 'VERSION_CODE=10009' "$PROPERTIES" || fail "Stable-candidate version code is not 10009"
+grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Acceptance-candidate version name is not 1.0.0"
+grep -Fqx 'VERSION_CODE=10010' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10010"
 grep -Fq 'Stable-candidate binary identity' "$NOTICE" || fail "Stable-candidate release boundary is missing from notice"
 grep -Fq 'Stable classification is not automatic' "$NOTICE" || fail "Stable classification boundary is missing from notice"
+grep -Fq 'gc.10 simplifies Settings' "$NOTICE" || fail "gc.10 settings-cleanup notice is missing"
 
 ! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" \
   || fail "legacy counterfeit-build warning remains in Commons source"
@@ -59,6 +62,29 @@ grep -Fq 'val style = FOLDER_STYLE_ROUNDED_CORNERS' "$FOLDER_STYLE_DIALOG" \
 
 ! grep -Fq 'settings_crop_thumbnails' "$SETTINGS_LAYOUT" \
   || fail "removed crop-thumbnail setting returned"
+! grep -Fq 'settings_file_thumbnail_style_holder' "$SETTINGS_LAYOUT" \
+  || fail "removed file-thumbnail-style setting returned"
+! grep -Fq 'settings_folder_thumbnail_style_holder' "$SETTINGS_LAYOUT" \
+  || fail "removed folder-thumbnail-style setting returned"
+! grep -Fq 'settings_purchase_thank_you_holder' "$SETTINGS_LAYOUT" \
+  || fail "upstream purchase acknowledgement returned"
+! grep -Fq 'setupFileThumbnailStyle()' "$SETTINGS_ACTIVITY" \
+  || fail "removed file-thumbnail handler returned"
+! grep -Fq 'setupFolderThumbnailStyle()' "$SETTINGS_ACTIVITY" \
+  || fail "removed folder-thumbnail handler returned"
+grep -Fq 'Settings.ACTION_APPLICATION_DETAILS_SETTINGS' "$SETTINGS_ACTIVITY" \
+  || fail "Android privacy/permissions shortcut is missing"
+grep -Fq 'Uri.parse("package:$packageName")' "$SETTINGS_ACTIVITY" \
+  || fail "Android app-settings package target is missing"
+grep -Fq '@string/goreecloud_privacy_permissions' "$SETTINGS_LAYOUT" \
+  || fail "privacy section label is missing"
+grep -Fq '@string/goreecloud_android_app_permissions' "$SETTINGS_LAYOUT" \
+  || fail "Android app-permissions label is missing"
+grep -Fq 'name="goreecloud_privacy_permissions"' "$SETTINGS_STRINGS" \
+  || fail "privacy section string is missing"
+grep -Fq 'name="goreecloud_android_app_permissions"' "$SETTINGS_STRINGS" \
+  || fail "Android app-permissions string is missing"
+
 ! grep -Fq 'dialog_file_style_rounded_corners' "$FILE_STYLE_LAYOUT" \
   || fail "removed file-style control returned"
 ! grep -Fq 'dialog_radio_folder_square' "$FOLDER_STYLE_LAYOUT" \
@@ -81,4 +107,4 @@ grep -Fq '#F7F8FC' "$POPUP_LIGHT" \
 grep -Fq '#171C29' "$POPUP_DARK" \
   || fail "accepted dark popup surface is missing"
 
-printf 'GoreeCloud Gallery 1.0.0 Stable-candidate source acceptance invariants passed.\n'
+printf 'GoreeCloud Gallery 1.0.0 gc.10 source acceptance invariants passed.\n'
