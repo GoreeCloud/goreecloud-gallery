@@ -15,7 +15,12 @@ materialize() {
     exit 1
   fi
 
+  # GitHub's line-range source reads omit the source file's terminal newline.
+  # The migrated final fragments therefore intentionally omit it too. Restore
+  # exactly one terminal newline after concatenation before validating the
+  # reconstructed file against the historical Git blob.
   cat "${fragments[@]}" > "$OUT_DIR/$output"
+  printf '\n' >> "$OUT_DIR/$output"
 
   local actual_blob
   actual_blob="$(git hash-object "$OUT_DIR/$output")"
