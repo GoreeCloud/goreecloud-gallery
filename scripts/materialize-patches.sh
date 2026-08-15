@@ -15,11 +15,47 @@ materialize() {
     exit 1
   fi
 
-  # GitHub's line-range source reads omit the source file's terminal newline.
-  # The migrated final fragments therefore intentionally omit it too. Restore
-  # exactly one terminal newline after concatenation before validating the
-  # reconstructed file against the historical Git blob.
   cat "${fragments[@]}" > "$OUT_DIR/$output"
+
+  # GitHub line-range reads preserved all source bytes except some fragment-boundary
+  # and terminal newlines. Restore only those known migration boundaries, then prove
+  # the result byte-for-byte against the historical Git blob before execution.
+  case "$gc" in
+    gc5)
+      python3 - "$OUT_DIR/$output" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace(
+    'parent="ThemeOverlay.AppCompat.Light">        <item name="android:popupMenuStyle">',
+    'parent="ThemeOverlay.AppCompat.Light">\n        <item name="android:popupMenuStyle">',
+    1,
+)
+p.write_text(s)
+PY
+      ;;
+    gc7)
+      python3 - "$OUT_DIR/$output" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+s = s.replace(
+    '<item name="textAppearanceSmallPopupMenu">@style/GoreeCloudGalleryPopupTextLight</item>        <item name="android:itemTextAppearance">',
+    '<item name="textAppearanceSmallPopupMenu">@style/GoreeCloudGalleryPopupTextLight</item>\n        <item name="android:itemTextAppearance">',
+    1,
+)
+s = s.replace(
+    '            fail(f"missing popup resource invariant: {value}")    # Preserve gc.6',
+    '            fail(f"missing popup resource invariant: {value}")\n    # Preserve gc.6',
+    1,
+)
+p.write_text(s)
+PY
+      ;;
+  esac
+
   printf '\n' >> "$OUT_DIR/$output"
 
   local actual_blob
