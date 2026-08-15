@@ -52,9 +52,10 @@ if [ "${#secret_files[@]}" -ne 0 ]; then
   fail "release key material must remain outside source control"
 fi
 
-if grep -R -n -E -- '-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----' \
+if grep -R -n -E \
   --exclude-dir=.git \
   --exclude='*.md' \
+  -- '-----BEGIN ([A-Z0-9 ]+ )?PRIVATE KEY-----' \
   .; then
   fail "private-key PEM material appears to be committed"
 fi
