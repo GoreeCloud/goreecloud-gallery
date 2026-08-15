@@ -15,61 +15,37 @@ materialize() {
     exit 1
   fi
 
-  cat "${fragments[@]}" > "$OUT_DIR/$output"
-
-  # GitHub line-range reads preserved all source bytes except some fragment-boundary
-  # and terminal newlines. Restore only those known migration boundaries, then prove
-  # the result byte-for-byte against the historical Git blob before execution.
+  # The GitHub line-range reads used during migration omit newline bytes at slice
+  # boundaries. Reconstruct those few known boundaries explicitly. The historical
+  # Git blob check below remains the authority: no reconstructed script executes
+  # unless it is byte-for-byte identical to its source in the build-carrier branch.
   case "$gc" in
     gc5)
-      python3 - "$OUT_DIR/$output" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-s = p.read_text()
-s = s.replace(
-    'parent="ThemeOverlay.AppCompat.Light">        <item name="android:popupMenuStyle">',
-    'parent="ThemeOverlay.AppCompat.Light">\n        <item name="android:popupMenuStyle">',
-    1,
-)
-p.write_text(s)
-PY
+      test "${#fragments[@]}" -eq 2
+      cat "${fragments[0]}" > "$OUT_DIR/$output"
+      printf '\n' >> "$OUT_DIR/$output"
+      cat "${fragments[1]}" >> "$OUT_DIR/$output"
       ;;
     gc6)
-      python3 - "$OUT_DIR/$output" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-s = p.read_text()
-s = s.replace(
-    'tree.write(p, encoding="unicode", xml_declaration=True)\n\ndef notice(g):',
-    'tree.write(p, encoding="unicode", xml_declaration=True)\n\n\ndef notice(g):',
-    1,
-)
-p.write_text(s)
-PY
+      test "${#fragments[@]}" -eq 2
+      cat "${fragments[0]}" > "$OUT_DIR/$output"
+      printf '\n' >> "$OUT_DIR/$output"
+      cat "${fragments[1]}" >> "$OUT_DIR/$output"
       ;;
     gc7)
-      python3 - "$OUT_DIR/$output" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-s = p.read_text()
-s = s.replace(
-    '<item name="textAppearanceSmallPopupMenu">@style/GoreeCloudGalleryPopupTextLight</item>        <item name="android:itemTextAppearance">',
-    '<item name="textAppearanceSmallPopupMenu">@style/GoreeCloudGalleryPopupTextLight</item>\n        <item name="android:itemTextAppearance">',
-    1,
-)
-s = s.replace(
-    '            fail(f"missing popup resource invariant: {value}")    # Preserve gc.6',
-    '            fail(f"missing popup resource invariant: {value}")\n\n    # Preserve gc.6',
-    1,
-)
-p.write_text(s)
-PY
+      test "${#fragments[@]}" -eq 3
+      cat "${fragments[0]}" > "$OUT_DIR/$output"
+      printf '\n' >> "$OUT_DIR/$output"
+      cat "${fragments[1]}" >> "$OUT_DIR/$output"
+      printf '\n\n' >> "$OUT_DIR/$output"
+      cat "${fragments[2]}" >> "$OUT_DIR/$output"
+      ;;
+    *)
+      cat "${fragments[@]}" > "$OUT_DIR/$output"
       ;;
   esac
 
+  # The final line-range read also omitted the original source file's terminal newline.
   printf '\n' >> "$OUT_DIR/$output"
 
   local actual_blob
