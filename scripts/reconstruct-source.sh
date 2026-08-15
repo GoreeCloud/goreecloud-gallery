@@ -53,4 +53,4 @@ PY
 git -C "$GALLERY_DIR" diff --check
 git -C "$COMMONS_DIR" diff --check
 
-printf 'Reconstructed GoreeCloud Gallery 1.0.0-gc.8 from pinned upstream revisions.\n'
+printf 'Reconstructed GoreeCloud Gallery 1.0.0-gc.7 with the gc.8 behavioral-test foundation.\n'
