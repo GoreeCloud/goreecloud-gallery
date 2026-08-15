@@ -6,6 +6,8 @@ This checklist defines the minimum evidence required before GoreeCloud Gallery c
 
 A green build alone is not stable-release approval. Stable promotion requires both automated evidence and controlled real-device acceptance.
 
+Use `docs/RELEASE-EVIDENCE-TEMPLATE.md` to record the candidate evidence without placing reusable secrets or personal media in the record.
+
 ## Release identity
 
 Record the following for every candidate:
@@ -20,10 +22,13 @@ Record the following for every candidate:
 - [ ] Test device model and Android version.
 - [ ] Date and result of real-device acceptance.
 
-## Automated source and build gates
+## Repository, source, and build gates
 
 The candidate must pass all applicable CI gates without bypassing a failed step:
 
+- [ ] Repository structure validation passes.
+- [ ] Repository security guardrails pass.
+- [ ] CI validates the exact repository revision under review rather than a different or synthetic revision.
 - [ ] Patch fragments reconstruct to the exact historical Git blob identities.
 - [ ] Pinned upstream Gallery and Commons commits are checked out exactly.
 - [ ] The gc.1 through gc.7 patch chain applies without source-shape exceptions.
@@ -41,6 +46,7 @@ The candidate must pass all applicable CI gates without bypassing a failed step:
 - [ ] Removed counterfeit-build warning text is absent from packaged DEX files.
 - [ ] GoreeCloud notice is present and matches the candidate version.
 - [ ] GNU GPL v3 license evidence is included with the release artifact.
+- [ ] Machine-readable build evidence identifies the exact GoreeCloud and upstream source revisions.
 - [ ] SHA-256 checksum is generated from the final signed APK.
 
 ## Signing-key and recovery gates
@@ -54,6 +60,15 @@ Complete these before the first stable release and revalidate when the signing b
 - [ ] A recovery copy has been opened successfully and the alias/fingerprint verified.
 - [ ] Signing-certificate SHA-256 fingerprint recorded as non-secret release evidence.
 - [ ] Signing workflow cannot access secrets from ordinary pull-request validation.
+
+## Android user/profile isolation acceptance
+
+GoreeCloud Gallery is a local Android client rather than a shared server application. Its application-appropriate multi-user boundary is Android OS user/profile isolation, the application sandbox, permission controls, and platform-authorized media/storage access.
+
+- [ ] The candidate does not intentionally bypass Android user/profile isolation.
+- [ ] The candidate does not combine private media across Android users or managed/work profiles without an explicit platform-authorized user action.
+- [ ] On a representative device that supports a secondary user or managed/work profile, Gallery behavior is checked from the available profile boundary.
+- [ ] If the available test device cannot create a secondary or managed profile, the limitation is recorded rather than silently marked passed.
 
 ## Storage and permission acceptance
 
@@ -97,6 +112,7 @@ Test against copied/disposable files and verify both the UI result and the actua
 - [ ] Dialog foreground/background contrast is readable.
 - [ ] Destructive actions are visually distinguishable and require the intended confirmation behavior.
 - [ ] No residual Fossify product branding incorrectly presents the application as the upstream product.
+- [ ] Decorative translucency, gradients, or depth do not reduce readability, performance, or task completion.
 
 ## Accessibility acceptance
 
@@ -129,12 +145,15 @@ Android normally prevents an in-place downgrade to a lower version code. Treat r
 - [ ] GitHub Actions use least-privilege permissions.
 - [ ] Third-party GitHub Actions are pinned to reviewed commit SHAs.
 - [ ] Checkout credentials are not persisted when they are unnecessary.
+- [ ] Pull-request validation does not use `pull_request_target` for untrusted source validation.
+- [ ] Signed-candidate automation remains manual and isolated behind the protected `stable-release` environment.
 - [ ] Build artifacts contain only intended APK, checksum, license/notice, and validation evidence.
 - [ ] Destructive file operations have been tested only with disposable media before stable promotion.
 
 ## License and provenance review
 
-- [ ] Upstream GNU GPL v3 license remains preserved.
+- [ ] Root GNU GPL v3 license text remains present.
+- [ ] Upstream GNU GPL v3 license remains preserved in reconstructed source and release evidence.
 - [ ] GoreeCloud modification notice is present.
 - [ ] Upstream project and exact source revisions are documented.
 - [ ] GoreeCloud patch history is preserved and reproducible.
@@ -146,7 +165,7 @@ Stable promotion is allowed only when:
 
 - [ ] all blocking checklist items are complete;
 - [ ] no known P0/P1 release defect remains open;
-- [ ] no unresolved data-loss, destructive-operation, permission, privacy, signing, or licensing defect remains open;
+- [ ] no unresolved data-loss, destructive-operation, user/profile-isolation, permission, privacy, signing, accessibility, upgrade/recovery, or licensing defect remains open;
 - [ ] final signed APK checksum and signer fingerprint are recorded;
 - [ ] final release evidence is retained;
 - [ ] the release is deliberately approved for publication.

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-This document defines the reproducible build, validation, acceptance, signing, and stable-promotion model for GoreeCloud Gallery.
+This document defines the reproducible build, validation, acceptance, signing, evidence-retention, and stable-promotion model for GoreeCloud Gallery.
 
-GoreeCloud Gallery is a GoreeCloud-maintained fork based on Fossify Gallery. The installable application ID is `com.goreecloud.gallery`.
+GoreeCloud Gallery is a GoreeCloud-maintained Android application based on Fossify Gallery. The installable application ID is `com.goreecloud.gallery`.
 
 ## Pinned upstream source
 
@@ -32,6 +32,8 @@ Historical script blobs:
 - gc.5 — `e8b1362e87d0e47997fa7f2ee36f851b4123fab5`
 - gc.6 — `4c9094e7b4139e0472f1c17ab2ff4a2186244c78`
 - gc.7 — `516339487492806932ec14b669c183e4919b1187`
+
+Accepted historical patch programs are provenance. New product behavior should normally extend the ordered GoreeCloud patch line rather than silently rewriting an already accepted historical transformation.
 
 ## Source reconstruction
 
@@ -67,23 +69,43 @@ Square thumbnail presentation is intentionally not exposed. File and folder thum
 
 Toolbar overflow menus are also a Glaze-controlled surface. A light GoreeCloud screen must not display a dark inherited popup and popup foreground/background colors must remain readable.
 
-## Offline and privacy boundary
+Decorative translucency, gradients, or depth never override readability, accessibility, performance, or reliable media interaction.
+
+## Offline, user, and privacy boundary
 
 GoreeCloud Gallery is intended to operate entirely against local Android media and storage APIs. The GoreeCloud patchset does not add analytics, advertising, tracking, cloud accounts, remote APIs, or `android.permission.INTERNET`.
+
+Gallery is a local Android client rather than a shared GoreeCloud server. Its application-appropriate multi-user boundary is Android OS user/profile isolation, the application sandbox, permission controls, and platform-authorized media/storage access. Gallery must not deliberately cross Android user/profile boundaries or combine private media across users or managed profiles without an explicit platform-authorized action.
 
 `scripts/validate-apk.sh` requires Android `apkanalyzer` and verifies the packaged application ID, version, Internet-permission boundary, optional expected debuggable state, valid APK signature, optional expected signer-certificate fingerprint, GoreeCloud notice, removed-warning DEX boundary, and final SHA-256 checksum.
 
 Android storage-management permissions are separate from network access and remain subject to real-device acceptance because file-management permissions are security-sensitive.
 
+## Repository readiness validation
+
+Before Android source reconstruction begins, CI validates the GoreeCloud repository itself.
+
+`scripts/validate-repository-structure.sh` verifies required project/governance records, historical patch directories, license/provenance markers, architecture/readiness boundaries, and that generated build or key-container material is not tracked.
+
+`scripts/validate-repository-security.sh` validates shell syntax, explicit read-only workflow permissions, absence of `pull_request_target`, immutable third-party Action SHAs, explicit non-persisted checkout credentials, exact-revision checkout requirements, manual `stable-release` isolation for signed candidates, and common signing/private-key file boundaries.
+
+These checks protect the build process itself rather than assuming a successful Android compile proves repository safety.
+
 ## Acceptance CI
 
 `.github/workflows/build-and-validate.yml` is the ordinary pull-request and `main` acceptance workflow.
 
+For a pull request, the workflow checks out `github.event.pull_request.head.sha` explicitly. For push/manual execution it checks out `github.sha`. It then verifies `git rev-parse HEAD` equals that expected revision before any build work. This prevents validation of GitHub's synthetic pull-request merge commit from being confused with validation of the exact proposed source revision.
+
 The workflow performs:
 
+- exact-revision checkout verification;
+- repository structure validation;
+- repository security validation;
 - exact source reconstruction through `scripts/reconstruct-source.sh`;
 - centralized source acceptance assertions through `scripts/validate-source-invariants.sh`;
-- Android unit-test task execution;
+- Android unit-test task execution and retained console evidence;
+- explicit `NO-SOURCE` interpretation when applicable;
 - Android lint;
 - FOSS debug APK compilation;
 - packaged application-ID verification;
@@ -95,28 +117,48 @@ The workflow performs:
 - GoreeCloud notice verification;
 - GNU GPL license preservation in the produced artifact bundle;
 - SHA-256 generation;
-- retention of available lint and Gradle problem reports;
+- machine-readable build identity through `scripts/write-build-evidence.sh`;
+- retention of APK validation output, unit-test interpretation, available test reports, lint output, and Gradle problem reports;
 - GitHub Actions artifact upload.
 
-The workflow uses read-only repository permissions, disables persisted checkout credentials, runs on an explicit Ubuntu 24.04 runner image, and pins third-party GitHub Actions to reviewed commit SHAs rather than mutable version tags.
+The workflow uses read-only repository permissions, disables persisted checkout credentials, runs on explicit Ubuntu 24.04, and pins third-party GitHub Actions to reviewed commit SHAs rather than mutable version tags.
 
-Dependabot is configured for the `github-actions` ecosystem so updates to the pinned actions can arrive as reviewable pull requests instead of being adopted implicitly.
+Dependabot is configured for the `github-actions` ecosystem so updates to the pinned Actions arrive as reviewable pull requests instead of being adopted implicitly.
 
 ### Unit-test coverage interpretation
 
-The upstream `:app:testFossDebugUnitTest` task previously completed with `NO-SOURCE`. That is a successful Gradle task result but it is not meaningful automated unit-test coverage.
+The upstream `:app:testFossDebugUnitTest` task has reported `NO-SOURCE`. That is a successful Gradle task result but it is not meaningful automated behavioral test coverage.
 
-Stable-release evidence must distinguish between "the unit-test task did not fail" and "GoreeCloud-owned tests exercised behavior." Targeted GoreeCloud-owned automated tests remain desirable where they can be added without creating disproportionate fork-maintenance cost.
+The acceptance artifact now records this state explicitly in `dist/validation/unit-test-coverage.txt`. If the task stops reporting `NO-SOURCE`, the evidence instructs reviewers to inspect the retained reports rather than automatically claiming a specific coverage level.
+
+Targeted GoreeCloud-owned behavioral tests remain a release-readiness requirement tracked separately where they can be added without creating disproportionate fork-maintenance cost.
+
+## Machine-readable build evidence
+
+`scripts/write-build-evidence.sh` records non-secret build identity for the final APK, including:
+
+- product and application ID;
+- GoreeCloud version and release classification;
+- exact repository commit;
+- exact pinned Fossify Gallery and Commons commits;
+- GitHub workflow run metadata when available;
+- APK filename and SHA-256;
+- expected absence of Internet permission;
+- Glaze UI requirement;
+- Android OS user/profile and application-sandbox multi-user model;
+- the fact that Stable publication is not automatic.
+
+The build-evidence file supplements the final APK validator output. It does not replace real-device or stable-promotion acceptance.
 
 ## Signed release-candidate workflow
 
 `.github/workflows/build-signed-release-candidate.yml` is manual and isolated from ordinary pull-request CI.
 
-It reconstructs the same pinned source, validates the same source invariants, runs the release unit-test/lint path, builds the FOSS release APK, verifies that all required signing secrets are present, aligns the APK, signs it with Android `apksigner`, and validates the final signed package with `scripts/validate-apk.sh`.
+The workflow checks out the exact dispatched `github.sha`, verifies the checked-out revision, validates repository structure/security, reconstructs the same pinned source, validates the same source invariants, runs the release unit-test/lint path with retained `NO-SOURCE` interpretation, builds the FOSS release APK, verifies that all required signing secrets are present, aligns the APK, signs it with Android `apksigner`, and validates the final signed package with `scripts/validate-apk.sh`.
 
 The workflow expects signing values only from the `stable-release` GitHub environment and verifies that the produced APK is signed by the approved long-lived certificate through `ANDROID_RELEASE_CERT_SHA256`.
 
-The workflow does not publish a GitHub Release. Its output is a signed release candidate plus checksum, licensing/notice files, and available validation evidence. Stable publication remains a separate deliberate decision after manual acceptance.
+The workflow does not run automatically on push or pull requests and does not publish a GitHub Release. Its output is a signed release candidate plus checksum, licensing/notice files, build metadata, and available validation evidence. Stable publication remains a separate deliberate decision after manual acceptance.
 
 See `RELEASE-SIGNING.md` for the full key-management and GitHub secret contract.
 
@@ -128,7 +170,7 @@ gc.7 moved the correction into `MySearchMenu`, assigning a GoreeCloud light or d
 
 Real-device screenshots supplied after gc.7 confirm that the previously defective overflow menus are now readable on both the main folders view and an opened media folder. This closes that specific visual acceptance defect.
 
-That acceptance does not by itself prove all file-management, storage-permission, accessibility, signing, or upgrade/recovery requirements.
+That acceptance does not by itself prove all file-management, storage-permission, Android user/profile isolation, accessibility, signing, automated-behavior, or upgrade/recovery requirements.
 
 `STABLE-RELEASE-CHECKLIST.md` is the release gate for those remaining areas. Destructive operation testing must use disposable copied media rather than irreplaceable personal data.
 
@@ -156,7 +198,7 @@ Android normally prevents an in-place downgrade to a lower version code. A bad-r
 
 ## Release evidence
 
-For every candidate considered for stable promotion, retain at minimum:
+For every candidate considered for stable promotion, use `RELEASE-EVIDENCE-TEMPLATE.md` and retain at minimum:
 
 - GoreeCloud commit SHA;
 - upstream Gallery and Commons SHAs;
@@ -164,8 +206,11 @@ For every candidate considered for stable promotion, retain at minimum:
 - workflow run identifier;
 - final signed APK SHA-256;
 - signer certificate SHA-256;
+- build metadata and APK validation evidence;
+- explicit unit-test coverage interpretation;
 - lint/report evidence;
 - test device and Android version;
+- Android user/profile isolation result where the device supports it;
 - real-device permission and destructive-operation acceptance result;
 - accessibility acceptance result;
 - upgrade/recovery acceptance result;
@@ -182,9 +227,12 @@ At minimum, stable release remains blocked until:
 - a signed release candidate passes CI and signer-fingerprint verification;
 - broader real-device copy, move, delete, recycle-bin/trash, hidden/excluded, favorites, playback, editing, and destructive-operation flows pass;
 - storage-permission behavior passes;
+- Android user/profile isolation is accepted where representative device support exists or the test limitation is explicitly recorded;
 - upgrade and recovery behavior passes;
 - accessibility review passes;
+- meaningful GoreeCloud-owned behavioral-test evidence is established where maintainable or the remaining manual-only boundary is explicitly justified;
 - final license/source attribution passes;
-- final release evidence is retained.
+- final release evidence is retained;
+- repository-level `main` protection is configured so the normal acceptance path cannot be bypassed.
 
 The current gc.7 acceptance APK is not a stable production release.
