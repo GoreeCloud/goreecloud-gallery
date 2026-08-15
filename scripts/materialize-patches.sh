@@ -62,7 +62,7 @@ s = s.replace(
 )
 s = s.replace(
     '            fail(f"missing popup resource invariant: {value}")    # Preserve gc.6',
-    '            fail(f"missing popup resource invariant: {value}")\n    # Preserve gc.6',
+    '            fail(f"missing popup resource invariant: {value}")\n\n    # Preserve gc.6',
     1,
 )
 p.write_text(s)
