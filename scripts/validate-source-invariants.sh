@@ -13,6 +13,8 @@ fail() {
 [ -d "$COMMONS_DIR" ] || fail "Commons source directory not found: $COMMONS_DIR"
 
 COMMONS_MAIN="$COMMONS_DIR/commons/src/main"
+PROPERTIES="$GALLERY_DIR/gradle.properties"
+NOTICE="$GALLERY_DIR/GOREECLOUD-NOTICE.md"
 CONFIG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt"
 POLICY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicy.kt"
 POLICY_TEST="$GALLERY_DIR/app/src/test/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicyTest.kt"
@@ -25,6 +27,11 @@ SEARCH_MENU="$COMMONS_DIR/commons/src/main/kotlin/org/fossify/commons/views/MySe
 SEARCH_LAYOUT="$COMMONS_DIR/commons/src/main/res/layout/menu_search.xml"
 POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml"
 POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
+
+grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Stable-candidate version name is not 1.0.0"
+grep -Fqx 'VERSION_CODE=10009' "$PROPERTIES" || fail "Stable-candidate version code is not 10009"
+grep -Fq 'Stable-candidate binary identity' "$NOTICE" || fail "Stable-candidate release boundary is missing from notice"
+grep -Fq 'Stable classification is not automatic' "$NOTICE" || fail "Stable classification boundary is missing from notice"
 
 ! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" \
   || fail "legacy counterfeit-build warning remains in Commons source"
@@ -74,4 +81,4 @@ grep -Fq '#F7F8FC' "$POPUP_LIGHT" \
 grep -Fq '#171C29' "$POPUP_DARK" \
   || fail "accepted dark popup surface is missing"
 
-printf 'GoreeCloud Gallery source acceptance invariants passed.\n'
+printf 'GoreeCloud Gallery 1.0.0 Stable-candidate source acceptance invariants passed.\n'
