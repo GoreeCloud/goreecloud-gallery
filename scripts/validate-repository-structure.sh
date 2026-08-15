@@ -28,6 +28,7 @@ required_files=(
   scripts/validate-repository-security.sh
   scripts/validate-repository-structure.sh
   scripts/validate-source-invariants.sh
+  scripts/write-build-evidence.sh
 )
 
 for path in "${required_files[@]}"; do
@@ -63,13 +64,13 @@ grep -Fq 'Glaze UI architecture' docs/ARCHITECTURE.md \
 grep -Fq 'Disposable copied media used' docs/RELEASE-EVIDENCE-TEMPLATE.md \
   || fail 'release evidence template does not protect destructive-operation testing'
 
-if git ls-files -z | grep -zE '\.(apk|aab|jks|keystore|p12|pfx)$' >/dev/null; then
-  fail 'generated package or key-container material is tracked in Git'
+if git ls-files -z | grep -zE '\.(apk|aab|jks|keystore|p12|pfx|pem|key|der)$' >/dev/null; then
+  fail 'generated package or key/certificate-container material is tracked in Git'
 fi
 
 for generated in .build upstream-gallery upstream-commons dist dex-validation; do
-  if git ls-files --error-unmatch "$generated" >/dev/null 2>&1; then
-    fail "generated build path is tracked in Git: $generated"
+  if git ls-files "$generated/**" | grep -q .; then
+    fail "generated build path contains tracked files: $generated"
   fi
 done
 
