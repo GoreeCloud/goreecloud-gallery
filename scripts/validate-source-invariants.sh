@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GALLERY_DIR="${1:-upstream-gallery}"
+COMMONS_DIR="${2:-upstream-commons}"
+
+fail() {
+  printf 'GoreeCloud Gallery source validation failed: %s\n' "$*" >&2
+  exit 1
+}
+
+[ -d "$GALLERY_DIR" ] || fail "Gallery source directory not found: $GALLERY_DIR"
+[ -d "$COMMONS_DIR" ] || fail "Commons source directory not found: $COMMONS_DIR"
+
+COMMONS_MAIN="$COMMONS_DIR/commons/src/main"
+CONFIG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt"
+FILE_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFileThumbnailStyleDialog.kt"
+FOLDER_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFolderThumbnailStyleDialog.kt"
+SETTINGS_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_settings.xml"
+FILE_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_file_thumbnail_style.xml"
+FOLDER_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_folder_thumbnail_style.xml"
+SEARCH_MENU="$COMMONS_DIR/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt"
+SEARCH_LAYOUT="$COMMONS_DIR/commons/src/main/res/layout/menu_search.xml"
+POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml"
+POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
+
+! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" \
+  || fail "legacy counterfeit-build warning remains in Commons source"
+! grep -R -Fq "download the original one from www.fossify.org. Thanks" "$COMMONS_MAIN" \
+  || fail "legacy Fossify download warning remains in Commons source"
+
+grep -Fq 'get() = false' "$CONFIG" \
+  || fail "expected GoreeCloud configuration invariant is missing"
+grep -Fq 'get() = FOLDER_STYLE_ROUNDED_CORNERS' "$CONFIG" \
+  || fail "rounded folder thumbnail default is missing"
+grep -Fq 'config.fileRoundedCorners = true' "$FILE_STYLE_DIALOG" \
+  || fail "rounded file thumbnail enforcement is missing"
+grep -Fq 'val style = FOLDER_STYLE_ROUNDED_CORNERS' "$FOLDER_STYLE_DIALOG" \
+  || fail "rounded folder thumbnail enforcement is missing"
+
+! grep -Fq 'settings_crop_thumbnails' "$SETTINGS_LAYOUT" \
+  || fail "removed crop-thumbnail setting returned"
+! grep -Fq 'dialog_file_style_rounded_corners' "$FILE_STYLE_LAYOUT" \
+  || fail "removed file-style control returned"
+! grep -Fq 'dialog_radio_folder_square' "$FOLDER_STYLE_LAYOUT" \
+  || fail "removed square-folder control returned"
+! grep -Fq 'dialog_radio_folder_rounded_corners' "$FOLDER_STYLE_LAYOUT" \
+  || fail "removed folder-style selector returned"
+
+grep -Fq 'ColorUtils.calculateLuminance(backgroundColor) >= 0.5' "$SEARCH_MENU" \
+  || fail "popup luminance selection is missing"
+grep -Fq 'R.style.GoreeCloudGalleryPopupThemeLight' "$SEARCH_MENU" \
+  || fail "light popup theme is missing"
+grep -Fq 'R.style.GoreeCloudGalleryPopupThemeDark' "$SEARCH_MENU" \
+  || fail "dark popup theme is missing"
+[ "$(grep -Fc 'updatePopupTheme()' "$SEARCH_MENU")" -ge 2 ] \
+  || fail "popup theme is not refreshed in all accepted paths"
+grep -Fq 'app:popupTheme="@style/GoreeCloudGalleryPopupThemeLight"' "$SEARCH_LAYOUT" \
+  || fail "default toolbar popup theme is missing"
+grep -Fq '#F7F8FC' "$POPUP_LIGHT" \
+  || fail "accepted light popup surface is missing"
+grep -Fq '#171C29' "$POPUP_DARK" \
+  || fail "accepted dark popup surface is missing"
+
+printf 'GoreeCloud Gallery source acceptance invariants passed.\n'

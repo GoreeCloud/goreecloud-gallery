@@ -5,16 +5,16 @@ on:
     branches: [main]
     paths:
       - 'patches/**'
-      - 'scripts/materialize-patches.sh'
-      - '.github/workflows/build-and-validate.yml'
+      - 'scripts/**'
+      - '.github/workflows/**'
       - 'README.md'
       - 'docs/**'
   pull_request:
     branches: [main]
     paths:
       - 'patches/**'
-      - 'scripts/materialize-patches.sh'
-      - '.github/workflows/build-and-validate.yml'
+      - 'scripts/**'
+      - '.github/workflows/**'
       - 'README.md'
       - 'docs/**'
   workflow_dispatch:
@@ -28,123 +28,70 @@ concurrency:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
       - name: Check out GoreeCloud Gallery
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - name: Verify and materialize migrated patch chain
-        run: bash scripts/materialize-patches.sh
+      - name: Validate repository security guardrails
+        run: bash scripts/validate-repository-security.sh
 
       - name: Set up Java 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Clone exact Fossify Gallery baseline
-        run: |
-          git clone --filter=blob:none --no-checkout https://github.com/FossifyOrg/Gallery.git upstream-gallery
-          git -C upstream-gallery checkout --detach b28299dc33821eee8d108a9880ce87876cf31443
-          test "$(git -C upstream-gallery rev-parse HEAD)" = "b28299dc33821eee8d108a9880ce87876cf31443"
+      - name: Reconstruct exact GoreeCloud source
+        run: bash scripts/reconstruct-source.sh
 
-      - name: Clone exact Fossify Commons baseline
-        run: |
-          git clone --filter=blob:none --no-checkout https://github.com/FossifyOrg/commons.git upstream-commons
-          git -C upstream-commons checkout --detach acfd352df1a1852d17a5f77def8b7ad6e522a5b6
-          test "$(git -C upstream-commons rev-parse HEAD)" = "acfd352df1a1852d17a5f77def8b7ad6e522a5b6"
+      - name: Validate GoreeCloud source acceptance invariants
+        run: bash scripts/validate-source-invariants.sh
 
-      - name: Apply GoreeCloud gc.1 through gc.7 patch chain
-        run: |
-          python3 .build/patches/build_goreecloud_gallery.py upstream-gallery
-          python3 .build/patches/build_goreecloud_gallery_gc2.py upstream-gallery upstream-commons
-          python3 .build/patches/build_goreecloud_gallery_gc3.py upstream-gallery upstream-commons
-          python3 .build/patches/build_goreecloud_gallery_gc4.py upstream-gallery upstream-commons
-          python3 .build/patches/build_goreecloud_gallery_gc5.py upstream-gallery upstream-commons
-          python3 .build/patches/build_goreecloud_gallery_gc6.py upstream-gallery upstream-commons
-          python3 .build/patches/build_goreecloud_gallery_gc7.py upstream-gallery upstream-commons
-          python3 -c 'from pathlib import Path; p=Path("upstream-gallery/settings.gradle.kts"); p.write_text(p.read_text().rstrip() + "\n")'
-          git -C upstream-gallery diff --check
-          git -C upstream-commons diff --check
-
-      - name: Validate GoreeCloud acceptance invariants
-        run: |
-          set -euo pipefail
-
-          ! grep -R -Fq "You are using a fake version of the app" upstream-commons/commons/src/main
-          ! grep -R -Fq "download the original one from www.fossify.org. Thanks" upstream-commons/commons/src/main
-
-          grep -Fq 'get() = false' upstream-gallery/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt
-          grep -Fq 'get() = FOLDER_STYLE_ROUNDED_CORNERS' upstream-gallery/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt
-          grep -Fq 'config.fileRoundedCorners = true' upstream-gallery/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFileThumbnailStyleDialog.kt
-          grep -Fq 'val style = FOLDER_STYLE_ROUNDED_CORNERS' upstream-gallery/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFolderThumbnailStyleDialog.kt
-          ! grep -Fq 'settings_crop_thumbnails' upstream-gallery/app/src/main/res/layout/activity_settings.xml
-          ! grep -Fq 'dialog_file_style_rounded_corners' upstream-gallery/app/src/main/res/layout/dialog_change_file_thumbnail_style.xml
-          ! grep -Fq 'dialog_radio_folder_square' upstream-gallery/app/src/main/res/layout/dialog_change_folder_thumbnail_style.xml
-          ! grep -Fq 'dialog_radio_folder_rounded_corners' upstream-gallery/app/src/main/res/layout/dialog_change_folder_thumbnail_style.xml
-
-          grep -Fq 'ColorUtils.calculateLuminance(backgroundColor) >= 0.5' upstream-commons/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt
-          grep -Fq 'R.style.GoreeCloudGalleryPopupThemeLight' upstream-commons/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt
-          grep -Fq 'R.style.GoreeCloudGalleryPopupThemeDark' upstream-commons/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt
-          test "$(grep -Fc 'updatePopupTheme()' upstream-commons/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt)" -ge 2
-          grep -Fq 'app:popupTheme="@style/GoreeCloudGalleryPopupThemeLight"' upstream-commons/commons/src/main/res/layout/menu_search.xml
-          grep -Fq '#F7F8FC' upstream-commons/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml
-          grep -Fq '#171C29' upstream-commons/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml
-
-      - name: Run Android unit tests and lint
+      - name: Run Android unit-test task and lint
         working-directory: upstream-gallery
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:testFossDebugUnitTest :app:lintFossDebug
 
-      - name: Build installable FOSS APK
+      - name: Build installable FOSS acceptance APK
         working-directory: upstream-gallery
         run: ./gradlew --no-daemon --stacktrace :app:assembleFossDebug
 
-      - name: Collect and validate APK
+      - name: Collect and validate acceptance evidence
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist
+
+          mkdir -p dist/validation
           mapfile -t apks < <(find upstream-gallery/app/build/outputs/apk/foss/debug -type f -name '*.apk' | sort)
           test "${#apks[@]}" -eq 1
-          cp "${apks[0]}" dist/GoreeCloud-Gallery-1.0.0-gc.7.apk
 
           APK="dist/GoreeCloud-Gallery-1.0.0-gc.7.apk"
-          test -s "$APK"
-          unzip -p "$APK" assets/goreecloud_notice.txt | grep -F "GoreeCloud Gallery 1.0.0-gc.7"
+          cp "${apks[0]}" "$APK"
 
-          APKANALYZER=""
-          if command -v apkanalyzer >/dev/null 2>&1; then
-            APKANALYZER="$(command -v apkanalyzer)"
-          elif [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" ]; then
-            APKANALYZER="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
-          fi
+          CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-1.0.0-gc.7.sha256" \
+          EXPECTED_DEBUGGABLE=true \
+            bash scripts/validate-apk.sh "$APK" 1.0.0-gc.7
 
-          if [ -n "$APKANALYZER" ]; then
-            test "$($APKANALYZER manifest application-id "$APK")" = "com.goreecloud.gallery"
-            ! $APKANALYZER manifest permissions "$APK" | grep -Fq "android.permission.INTERNET"
-          fi
-
-          mapfile -t dex_files < <(zipinfo -1 "$APK" | grep -E '^classes([0-9]+)?\.dex$' | sort)
-          test "${#dex_files[@]}" -ge 1
-          mkdir -p dex-validation
-          for dex in "${dex_files[@]}"; do
-            safe_name="${dex//\//_}"
-            unzip -p "$APK" "$dex" > "dex-validation/$safe_name"
-            strings "dex-validation/$safe_name" > "dex-validation/$safe_name.strings"
-            ! grep -Fq "You are using a fake version of the app" "dex-validation/$safe_name.strings"
-            ! grep -Fq "download the original one from www.fossify.org. Thanks" "dex-validation/$safe_name.strings"
-          done
-
-          sha256sum "$APK" | tee dist/GoreeCloud-Gallery-1.0.0-gc.7.sha256
           cp upstream-gallery/GOREECLOUD-NOTICE.md dist/GOREECLOUD-NOTICE.md
           cp upstream-gallery/LICENSE dist/LICENSE-GPL-3.0.txt
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+          if [ -d upstream-gallery/app/build/reports ]; then
+            find upstream-gallery/app/build/reports -maxdepth 1 -type f -name 'lint-results-fossDebug.*' \
+              -exec cp {} dist/validation/ \;
+          fi
+
+          if [ -f upstream-gallery/build/reports/problems/problems-report.html ]; then
+            cp upstream-gallery/build/reports/problems/problems-report.html dist/validation/gradle-problems-report.html
+          fi
+
+      - name: Upload acceptance artifact and validation evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: GoreeCloud-Gallery-gc7-APK
           path: dist/
