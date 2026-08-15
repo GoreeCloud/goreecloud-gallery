@@ -6,16 +6,22 @@ on:
     paths:
       - 'patches/**'
       - 'scripts/**'
-      - '.github/workflows/**'
+      - '.github/**'
       - 'README.md'
+      - 'SECURITY.md'
+      - 'CONTRIBUTING.md'
+      - 'NOTICE.md'
       - 'docs/**'
   pull_request:
     branches: [main]
     paths:
       - 'patches/**'
       - 'scripts/**'
-      - '.github/workflows/**'
+      - '.github/**'
       - 'README.md'
+      - 'SECURITY.md'
+      - 'CONTRIBUTING.md'
+      - 'NOTICE.md'
       - 'docs/**'
   workflow_dispatch:
 
@@ -32,10 +38,23 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Check out GoreeCloud Gallery
+      - name: Check out GoreeCloud Gallery exact revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+
+      - name: Verify exact repository revision
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'Validated repository revision: %s\n' "$EXPECTED_SHA"
+
+      - name: Validate repository structure
+        run: bash scripts/validate-repository-structure.sh
 
       - name: Validate repository security guardrails
         run: bash scripts/validate-repository-security.sh
@@ -53,10 +72,32 @@ jobs:
         run: bash scripts/validate-source-invariants.sh
 
       - name: Run Android unit-test task and lint
+        shell: bash
         working-directory: upstream-gallery
         run: |
+          set -euo pipefail
+          mkdir -p ../dist/validation
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace :app:testFossDebugUnitTest :app:lintFossDebug
+          ./gradlew --no-daemon --stacktrace :app:testFossDebugUnitTest :app:lintFossDebug 2>&1 \
+            | tee ../dist/validation/gradle-test-lint.log
+
+          if grep -Fq '> Task :app:testFossDebugUnitTest NO-SOURCE' ../dist/validation/gradle-test-lint.log; then
+            cat > ../dist/validation/unit-test-coverage.txt <<'EOF'
+          task=:app:testFossDebugUnitTest
+          task_status=success
+          no_source=true
+          meaningful_behavioral_unit_tests_executed=false
+          interpretation=The upstream Gradle unit-test task succeeded but executed no unit-test sources. This is not behavioral test coverage.
+          EOF
+          else
+            cat > ../dist/validation/unit-test-coverage.txt <<'EOF'
+          task=:app:testFossDebugUnitTest
+          task_status=success
+          no_source=false
+          meaningful_behavioral_unit_tests_executed=review-test-report
+          interpretation=Unit-test sources were not reported as NO-SOURCE. Review retained test reports to confirm what executed.
+          EOF
+          fi
 
       - name: Build installable FOSS acceptance APK
         working-directory: upstream-gallery
@@ -76,7 +117,14 @@ jobs:
 
           CHECKSUM_OUTPUT="dist/GoreeCloud-Gallery-1.0.0-gc.7.sha256" \
           EXPECTED_DEBUGGABLE=true \
-            bash scripts/validate-apk.sh "$APK" 1.0.0-gc.7
+            bash scripts/validate-apk.sh "$APK" 1.0.0-gc.7 2>&1 \
+            | tee dist/validation/apk-validation.txt
+
+          bash scripts/write-build-evidence.sh \
+            "$APK" \
+            1.0.0-gc.7 \
+            acceptance-candidate \
+            dist/validation/build-evidence.txt
 
           cp upstream-gallery/GOREECLOUD-NOTICE.md dist/GOREECLOUD-NOTICE.md
           cp upstream-gallery/LICENSE dist/LICENSE-GPL-3.0.txt
@@ -84,6 +132,10 @@ jobs:
           if [ -d upstream-gallery/app/build/reports ]; then
             find upstream-gallery/app/build/reports -maxdepth 1 -type f -name 'lint-results-fossDebug.*' \
               -exec cp {} dist/validation/ \;
+          fi
+
+          if [ -d upstream-gallery/app/build/reports/tests ]; then
+            cp -R upstream-gallery/app/build/reports/tests dist/validation/test-reports
           fi
 
           if [ -f upstream-gallery/build/reports/problems/problems-report.html ]; then
