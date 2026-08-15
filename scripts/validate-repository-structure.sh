@@ -22,6 +22,7 @@ required_files=(
   docs/RELEASE-SIGNING.md
   docs/STABLE-RELEASE-CHECKLIST.md
   docs/RELEASE-EVIDENCE-TEMPLATE.md
+  docs/REPOSITORY-READINESS.md
   scripts/materialize-patches.sh
   scripts/reconstruct-source.sh
   scripts/validate-apk.sh
@@ -63,6 +64,8 @@ grep -Fq 'Glaze UI architecture' docs/ARCHITECTURE.md \
   || fail 'architecture does not document the Glaze UI layer'
 grep -Fq 'Disposable copied media used' docs/RELEASE-EVIDENCE-TEMPLATE.md \
   || fail 'release evidence template does not protect destructive-operation testing'
+grep -Fq 'Stable release: Not approved' docs/REPOSITORY-READINESS.md \
+  || fail 'repository readiness record does not preserve the stable-release boundary'
 
 if git ls-files -z | grep -zE '\.(apk|aab|jks|keystore|p12|pfx|pem|key|der)$' >/dev/null; then
   fail 'generated package or key/certificate-container material is tracked in Git'
