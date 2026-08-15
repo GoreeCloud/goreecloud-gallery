@@ -17,6 +17,8 @@ This document records the source-controlled readiness model for GoreeCloud Galle
 - Release state: Acceptance Candidate
 - Stable release: Not approved
 
+The current readiness branch adds the ordered gc.8 testability layer without changing the packaged `1.0.0-gc.7` acceptance identity. Stable classification remains unchanged until all independent release gates are complete.
+
 ## Repository readiness gates
 
 The repository is expected to retain all of these controls:
@@ -26,6 +28,7 @@ The repository is expected to retain all of these controls:
 - [x] README project entry point.
 - [x] Architecture record.
 - [x] Build and release model.
+- [x] Gallery-specific Glaze UI implementation and release-review contract.
 - [x] Release-signing boundary.
 - [x] Stable-release checklist.
 - [x] Release-evidence template.
@@ -41,8 +44,9 @@ The repository is expected to retain all of these controls:
 
 - [x] Exact Fossify Gallery source revision pinned.
 - [x] Exact Fossify Commons source revision pinned.
-- [x] Historical gc.1 through gc.7 transformation programs preserved.
-- [x] Historical patch blob identities validated before execution.
+- [x] Accepted gc.1 through gc.7 transformation programs preserved.
+- [x] Ordered gc.8 behavioral-test transformation added without rewriting accepted history.
+- [x] Patch blob identities validated before execution.
 - [x] Source reconstruction refuses ambiguous pre-existing working trees.
 - [x] `git diff --check` required on reconstructed source.
 
@@ -60,6 +64,18 @@ The repository is expected to retain all of these controls:
 - [x] Signed-candidate workflow is manual and bound to `stable-release`.
 - [x] Signed-candidate workflow does not publish Stable automatically.
 
+### Behavioral-test evidence controls
+
+- [x] GoreeCloud-specific thumbnail presentation policy is isolated as pure testable behavior.
+- [x] GoreeCloud-owned JVM regression tests cover uncropped thumbnails, rounded file thumbnails, and rounded folder thumbnails.
+- [x] Acceptance CI fails if the Gradle test task reports `NO-SOURCE`.
+- [x] Acceptance CI requires JUnit XML output.
+- [x] Acceptance CI requires the GoreeCloud policy test class to have executed.
+- [x] Acceptance CI requires at least three executed tests and zero failures/errors.
+- [x] Raw test reports and machine-readable test evidence are retained with the acceptance artifact.
+
+These controls define the required source state. They become validated readiness evidence only after the exact-head workflow for the reviewed commit completes successfully.
+
 ### Packaged-artifact controls
 
 - [x] Application ID validation.
@@ -72,7 +88,7 @@ The repository is expected to retain all of these controls:
 - [x] Removed counterfeit-warning DEX validation.
 - [x] Final APK SHA-256 generation.
 - [x] Build metadata/evidence generation.
-- [x] Explicit unit-test `NO-SOURCE` interpretation retained as evidence.
+- [x] Unit-test evidence retained separately from build success.
 
 ## GoreeCloud production-readiness gates
 
@@ -90,7 +106,9 @@ Security is a lifecycle requirement. Permission-sensitive and destructive media 
 
 ### Glaze UI
 
-Glaze UI is mandatory for Gallery's controlled user-facing surfaces. Current gc.7 acceptance has validated the previously defective toolbar overflow presentation, but stable acceptance still includes broader light/dark, dialog, destructive-action, accessibility, and responsive/device review.
+Glaze UI is mandatory for Gallery's controlled user-facing surfaces. `docs/GLAZE-UI.md` is the repository-local implementation contract. It records the product-specific visual invariants, accessibility boundary, privacy/dependency boundary, upstream-sync review requirements, automated-conformance boundary, and exception model.
+
+Current gc.7 acceptance has validated the previously defective toolbar overflow presentation, but Stable acceptance still includes broader light/dark, dialog, destructive-action, accessibility, user/profile, and representative-device review. No permanent Glaze UI exception is approved.
 
 ## Stable-release blockers
 
@@ -98,10 +116,10 @@ The following work remains intentionally separate from repository-source readine
 
 - **Issue #2 — Android stable signing:** create the long-lived release keystore, maintain independent protected recovery copies, configure the `stable-release` environment secrets, and successfully produce a fingerprint-verified signed candidate.
 - **Issue #3 — main branch protection:** enforce repository-level pull-request and acceptance-CI protection so normal direct pushes cannot bypass the validated merge path. The connected automation used for source maintenance does not currently expose branch-protection/ruleset mutation, so this remains an explicit repository-administration task rather than being silently assumed complete.
-- **Issue #4 — real-device stable acceptance:** complete storage/permission, copy/move/delete/trash/edit, accessibility, Glaze UI, upgrade, and recovery acceptance using disposable media.
-- **Issue #5 — GoreeCloud-owned behavioral tests:** add meaningful automated regression coverage where maintainable, and clearly distinguish executed tests from upstream `NO-SOURCE` tasks.
+- **Issue #4 — real-device stable acceptance:** complete storage/permission, copy/move/delete/trash/edit, Android user/profile, accessibility, Glaze UI, upgrade, and recovery acceptance using disposable media.
+- **Issue #5 — GoreeCloud-owned behavioral tests:** PR #8 introduces the first meaningful GoreeCloud-owned JVM behavioral suite and fail-closed execution evidence. The issue remains open until exact-head CI proves the tests execute successfully and the accepted change is merged.
 
-Stable must remain blocked while any applicable signing, data-loss, permission, privacy, accessibility, upgrade/recovery, licensing, or evidence requirement is incomplete.
+Stable must remain blocked while any applicable signing, data-loss, permission, privacy, accessibility, upgrade/recovery, licensing, governance, or evidence requirement is incomplete.
 
 ## Readiness interpretation
 
@@ -112,4 +130,4 @@ Use these classifications consistently:
 - **Signed release candidate:** the candidate has passed protected long-lived signing validation but still requires final manual stable acceptance.
 - **Stable:** all blocking release evidence is complete and publication has been deliberately approved.
 
-The current gc.7 line must continue to be described as an acceptance candidate until the remaining stable-release gates are actually satisfied.
+The current `1.0.0-gc.7` package must continue to be described as an acceptance candidate until the remaining Stable-release gates are actually satisfied.
