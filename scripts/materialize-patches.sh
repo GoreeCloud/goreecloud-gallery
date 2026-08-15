@@ -8,45 +8,41 @@ materialize() {
   local gc="$1"
   local output="$2"
   local expected_blob="$3"
+  local exact_path="patches/$gc/$output"
 
-  mapfile -t fragments < <(find "patches/$gc" -maxdepth 1 -type f -name '*.pyfrag' | sort)
-  if [ "${#fragments[@]}" -eq 0 ]; then
-    echo "No patch fragments found for $gc" >&2
-    exit 1
+  if [ -f "$exact_path" ]; then
+    cp "$exact_path" "$OUT_DIR/$output"
+  else
+    mapfile -t fragments < <(find "patches/$gc" -maxdepth 1 -type f -name '*.pyfrag' | sort)
+    if [ "${#fragments[@]}" -eq 0 ]; then
+      echo "No patch source found for $gc" >&2
+      exit 1
+    fi
+
+    # The GitHub line-range reads used during migration omit newline bytes at slice
+    # boundaries. Reconstruct those few known boundaries explicitly. The historical
+    # Git blob check below remains the authority.
+    case "$gc" in
+      gc5)
+        test "${#fragments[@]}" -eq 2
+        cat "${fragments[0]}" > "$OUT_DIR/$output"
+        printf '\n' >> "$OUT_DIR/$output"
+        cat "${fragments[1]}" >> "$OUT_DIR/$output"
+        ;;
+      gc6)
+        test "${#fragments[@]}" -eq 2
+        cat "${fragments[0]}" > "$OUT_DIR/$output"
+        printf '\n' >> "$OUT_DIR/$output"
+        cat "${fragments[1]}" >> "$OUT_DIR/$output"
+        ;;
+      *)
+        cat "${fragments[@]}" > "$OUT_DIR/$output"
+        ;;
+    esac
+
+    # The final line-range read also omitted the source file's terminal newline.
+    printf '\n' >> "$OUT_DIR/$output"
   fi
-
-  # The GitHub line-range reads used during migration omit newline bytes at slice
-  # boundaries. Reconstruct those few known boundaries explicitly. The historical
-  # Git blob check below remains the authority: no reconstructed script executes
-  # unless it is byte-for-byte identical to its source in the build-carrier branch.
-  case "$gc" in
-    gc5)
-      test "${#fragments[@]}" -eq 2
-      cat "${fragments[0]}" > "$OUT_DIR/$output"
-      printf '\n' >> "$OUT_DIR/$output"
-      cat "${fragments[1]}" >> "$OUT_DIR/$output"
-      ;;
-    gc6)
-      test "${#fragments[@]}" -eq 2
-      cat "${fragments[0]}" > "$OUT_DIR/$output"
-      printf '\n' >> "$OUT_DIR/$output"
-      cat "${fragments[1]}" >> "$OUT_DIR/$output"
-      ;;
-    gc7)
-      test "${#fragments[@]}" -eq 3
-      cat "${fragments[0]}" > "$OUT_DIR/$output"
-      printf '\n' >> "$OUT_DIR/$output"
-      cat "${fragments[1]}" >> "$OUT_DIR/$output"
-      printf '\n\n' >> "$OUT_DIR/$output"
-      cat "${fragments[2]}" >> "$OUT_DIR/$output"
-      ;;
-    *)
-      cat "${fragments[@]}" > "$OUT_DIR/$output"
-      ;;
-  esac
-
-  # The final line-range read also omitted the original source file's terminal newline.
-  printf '\n' >> "$OUT_DIR/$output"
 
   local actual_blob
   actual_blob="$(git hash-object "$OUT_DIR/$output")"
