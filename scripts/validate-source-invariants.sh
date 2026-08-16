@@ -70,8 +70,6 @@ grep -Fq '@string/goreecloud_android_app_permissions' "$SETTINGS_LAYOUT" || fail
 grep -Fq 'name="goreecloud_privacy_permissions"' "$SETTINGS_STRINGS" || fail "privacy section string is missing"
 grep -Fq 'name="goreecloud_android_app_permissions"' "$SETTINGS_STRINGS" || fail "Android app-permissions string is missing"
 
-# Glaze UI 1.0 native Android contract: semantic resources, adaptive composition,
-# practical touch targets, light/dark identity, layered surfaces, and local-only drawables.
 for path in "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_SW600" "$GLAZE_SW840" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM"; do
   [ -f "$path" ] || fail "missing Glaze UI native resource: $path"
 done
@@ -90,7 +88,9 @@ grep -Fq '@drawable/goreecloud_glaze_toolbar' "$SETTINGS_LAYOUT" || fail "Glaze 
 grep -Fq '@drawable/goreecloud_glaze_settings_item' "$SETTINGS_LAYOUT" || fail "Glaze raised setting rows are not applied"
 grep -Fq '@dimen/goreecloud_glaze_target_comfortable' "$SETTINGS_LAYOUT" || fail "Glaze comfortable target size is not applied"
 grep -Fq '@dimen/goreecloud_glaze_settings_horizontal_inset' "$SETTINGS_LAYOUT" || fail "Glaze adaptive inset is not applied"
-! grep -R -Eq 'https?://|@font/.*remote' "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" || fail "Glaze UI resources introduced a remote dependency"
+# Android XML namespace declarations use the standard http://schemas.android.com URI;
+# reject actual network-delivered UI references without treating that namespace as a dependency.
+! grep -R -Eq 'https://|src="http://|href="http://|@font/.*remote' "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" || fail "Glaze UI resources introduced a remote dependency"
 
 ! grep -Fq 'dialog_file_style_rounded_corners' "$FILE_STYLE_LAYOUT" || fail "removed file-style control returned"
 ! grep -Fq 'dialog_radio_folder_square' "$FOLDER_STYLE_LAYOUT" || fail "removed square-folder control returned"
