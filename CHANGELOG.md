@@ -9,22 +9,26 @@ This changelog records material source, build, validation, release-engineering, 
 - gc.9 final package-identity patch with `VERSION_NAME=1.0.0` and Android `VERSION_CODE=10009`;
 - non-secret Stable signing execution runbook;
 - representative-device acceptance runbook;
-- authoritative `docs/STABLE-CANDIDATE-1.0.0.md` promotion contract.
+- authoritative `docs/STABLE-CANDIDATE-1.0.0.md` promotion contract;
+- gc.10 Settings cleanup and Android-native Privacy & permissions access;
+- gc.11 native Glaze UI 1.0 semantic resources, adaptive Settings composition, practical target sizing, and fail-closed conformance checks.
 
 ### Changed
 
-- ordinary acceptance CI now builds and validates `GoreeCloud-Gallery-1.0.0.apk` while retaining `acceptance-candidate` classification;
+- ordinary acceptance CI builds and validates `GoreeCloud-Gallery-1.0.0.apk` while retaining `acceptance-candidate` classification;
 - the protected manual signing workflow defaults to `1.0.0` while retaining `signed-release-candidate` classification;
-- repository/source validation now requires gc.9 and preserves gc.8 GoreeCloud behavioral-test and Glaze UI invariants;
+- gc.10 removes misleading fixed-thumbnail controls and upstream purchase UI while preserving meaningful Gallery settings;
+- gc.11 increments Android `VERSION_CODE` to `10011` while preserving semantic version `1.0.0`;
+- Settings now uses Glaze Canvas, gradient navigation emphasis, rounded Raised rows, Android ripple feedback, 48dp comfortable interactive targets, dedicated light/dark semantic palettes, and wider native insets at `sw600dp` and `sw840dp`;
+- Gallery records Glaze UI `1.0.0` and canonical reference revision `d6e446fd8ef251259d16368d50aad90d9287a774` as its native conformance target;
+- repository/source validation now requires gc.11 and fails closed if the native Glaze semantic resource or Settings integration contract disappears;
 - Stable promotion must reuse the exact accepted signed binary rather than rebuilding merely to alter release labeling.
 
 ### Validated
 
-- exact-head PR validation reconstructed pinned Fossify Gallery and Commons source through gc.9;
-- repository structure/security and source acceptance checks passed;
-- `GoreeCloudGalleryPolicyTest` executed successfully under fail-closed JUnit evidence requirements;
-- Android lint passed;
-- the `1.0.0` FOSS acceptance APK was assembled, package-validated, checksummed, and retained with machine-readable evidence.
+- gc.9 exact-head validation reconstructed pinned Fossify Gallery and Commons source, passed repository/security/source checks, executed `GoreeCloudGalleryPolicyTest`, passed Android lint, and assembled/validated the `1.0.0` FOSS acceptance APK;
+- gc.10 exact-head and post-merge validation passed after Settings simplification and produced the updated acceptance APK from `main`;
+- gc.11 requires a new exact-head acceptance run before merge because it changes Android resources and versionCode.
 
 ### Release boundary
 
