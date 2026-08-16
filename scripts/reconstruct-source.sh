@@ -42,6 +42,7 @@ python3 .build/patches/build_goreecloud_gallery_gc7.py "$GALLERY_DIR" "$COMMONS_
 python3 .build/patches/build_goreecloud_gallery_gc8.py "$GALLERY_DIR" "$COMMONS_DIR"
 python3 .build/patches/build_goreecloud_gallery_gc9.py "$GALLERY_DIR" "$COMMONS_DIR"
 python3 .build/patches/build_goreecloud_gallery_gc10.py "$GALLERY_DIR" "$COMMONS_DIR"
+python3 .build/patches/build_goreecloud_gallery_gc11.py "$GALLERY_DIR" "$COMMONS_DIR"
 
 python3 - "$GALLERY_DIR/settings.gradle.kts" <<'PY'
 from pathlib import Path
@@ -54,4 +55,4 @@ PY
 git -C "$GALLERY_DIR" diff --check
 git -C "$COMMONS_DIR" diff --check
 
-printf 'Reconstructed GoreeCloud Gallery 1.0.0 acceptance-candidate source through gc.10.\n'
+printf 'Reconstructed GoreeCloud Gallery 1.0.0 acceptance-candidate source through gc.11.\n'
