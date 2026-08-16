@@ -11,7 +11,8 @@ This changelog records material source, build, validation, release-engineering, 
 - representative-device acceptance runbook;
 - authoritative `docs/STABLE-CANDIDATE-1.0.0.md` promotion contract;
 - gc.10 Settings cleanup and Android-native Privacy & permissions access;
-- gc.11 native Glaze UI 1.0 semantic resources, adaptive Settings composition, practical target sizing, and fail-closed conformance checks.
+- gc.11 native Glaze UI 1.0 semantic resources, adaptive Settings composition, practical target sizing, and fail-closed conformance checks;
+- gc.12 Glaze UI browsing-surface integration for the folders screen and opened-folder media grid.
 
 ### Changed
 
@@ -19,16 +20,20 @@ This changelog records material source, build, validation, release-engineering, 
 - the protected manual signing workflow defaults to `1.0.0` while retaining `signed-release-candidate` classification;
 - gc.10 removes misleading fixed-thumbnail controls and upstream purchase UI while preserving meaningful Gallery settings;
 - gc.11 increments Android `VERSION_CODE` to `10011` while preserving semantic version `1.0.0`;
-- Settings now uses Glaze Canvas, gradient navigation emphasis, rounded Raised rows, Android ripple feedback, 48dp comfortable interactive targets, dedicated light/dark semantic palettes, and wider native insets at `sw600dp` and `sw840dp`;
+- gc.12 increments Android `VERSION_CODE` to `10012` while preserving semantic version `1.0.0`;
+- Settings uses Glaze Canvas, gradient navigation emphasis, rounded Raised rows, Android ripple feedback, 48dp comfortable interactive targets, dedicated light/dark semantic palettes, and wider native insets at `sw600dp` and `sw840dp`;
+- primary browsing surfaces now use the Glaze Canvas, branded menu chrome, adaptive 8/16/24dp media-aware gutters, Raised empty-state actions, comfortable action targets, and semantic loading accent without cardifying every thumbnail;
 - Gallery records Glaze UI `1.0.0` and canonical reference revision `d6e446fd8ef251259d16368d50aad90d9287a774` as its native conformance target;
-- repository/source validation now requires gc.11 and fails closed if the native Glaze semantic resource or Settings integration contract disappears;
+- repository/source validation requires the current Glaze patch line and fails closed if the semantic resource, Settings, or browsing-surface integration contract disappears;
 - Stable promotion must reuse the exact accepted signed binary rather than rebuilding merely to alter release labeling.
 
 ### Validated
 
 - gc.9 exact-head validation reconstructed pinned Fossify Gallery and Commons source, passed repository/security/source checks, executed `GoreeCloudGalleryPolicyTest`, passed Android lint, and assembled/validated the `1.0.0` FOSS acceptance APK;
 - gc.10 exact-head and post-merge validation passed after Settings simplification and produced the updated acceptance APK from `main`;
-- gc.11 requires a new exact-head acceptance run before merge because it changes Android resources and versionCode.
+- gc.11 exact-head run 31973570278 completed successfully on `14763702612f4c455102f3032e20eb204ea17cec`, including repository/security/source validation, GoreeCloud behavioral tests, Android lint, APK assembly, APK/evidence validation, and artifact upload;
+- PR #15 was squash merged as `245a34753f4d83e3abe36b95bbb7be37d1eb9002` after the exact gc.11 head passed acceptance; the post-merge main run was started as run 31977767072;
+- gc.12 requires its own exact-head acceptance run before merge because it changes primary Android browsing layouts and versionCode.
 
 ### Release boundary
 
