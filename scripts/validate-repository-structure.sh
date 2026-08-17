@@ -34,6 +34,7 @@ required_files=(
   patches/gc11/build_goreecloud_gallery_gc11.py
   patches/gc12/build_goreecloud_gallery_gc12.py
   patches/gc13/build_goreecloud_gallery_gc13.py
+  patches/gc14/build_goreecloud_gallery_gc14.py
   scripts/materialize-patches.sh
   scripts/reconstruct-source.sh
   scripts/validate-apk.sh
@@ -47,7 +48,7 @@ for path in "${required_files[@]}"; do
   [ -s "$path" ] || fail "required file is missing or empty: $path"
 done
 
-for patch_line in gc1 gc2 gc3 gc4 gc5 gc6 gc7 gc8 gc9 gc10 gc11 gc12 gc13; do
+for patch_line in gc1 gc2 gc3 gc4 gc5 gc6 gc7 gc8 gc9 gc10 gc11 gc12 gc13 gc14; do
   [ -d "patches/$patch_line" ] || fail "required patch directory is missing: patches/$patch_line"
 done
 
@@ -66,7 +67,7 @@ grep -Fq 'Glaze UI architecture' docs/ARCHITECTURE.md || fail 'architecture does
 grep -Fq 'GoreeCloud Gallery Glaze UI Contract' docs/GLAZE-UI.md || fail 'Glaze UI contract does not identify its Gallery scope'
 grep -Fq 'Target design system: **Glaze UI 1.0.0**' docs/GLAZE-UI.md || fail 'Glaze UI target version is not documented'
 grep -Fq 'd6e446fd8ef251259d16368d50aad90d9287a774' docs/GLAZE-UI.md || fail 'canonical Glaze UI reference revision is not documented'
-grep -Fq 'Current Gallery implementation line: `gc.13`' docs/GLAZE-UI.md || fail 'gc.13 Glaze UI implementation line is not documented'
+grep -Fq 'Current Gallery implementation line: `gc.14`' docs/GLAZE-UI.md || fail 'gc.14 Glaze UI implementation line is not documented'
 grep -Fq 'No permanent Glaze UI exception is approved' docs/GLAZE-UI.md || fail 'Glaze UI exception boundary is not documented'
 grep -Fq 'meaningful GoreeCloud-owned JVM tests actually execute' docs/GLAZE-UI.md || fail 'Glaze UI contract does not preserve behavioral-test evidence requirements'
 grep -Fq 'GoreeCloud Gallery Stable Signing Runbook' docs/STABLE-SIGNING-RUNBOOK.md || fail 'stable signing runbook does not identify its Gallery scope'
@@ -75,8 +76,9 @@ grep -Fq 'GoreeCloud Gallery 1.0.0 Stable Candidate' docs/STABLE-CANDIDATE-1.0.0
 grep -Fq 'Stable release: Not approved' docs/REPOSITORY-READINESS.md || fail 'repository readiness record does not preserve the stable-release boundary'
 
 grep -Fq 'VERSION_NAME = "1.0.0"' patches/gc9/build_goreecloud_gallery_gc9.py || fail 'gc.9 does not set the final semantic version'
-grep -Fq 'VERSION_CODE = "10013"' patches/gc13/build_goreecloud_gallery_gc13.py || fail 'gc.13 does not set the current test-build version code'
-grep -Fq 'GLAZE_UI_VERSION = "1.0.0"' patches/gc13/build_goreecloud_gallery_gc13.py || fail 'gc.13 does not identify the Glaze UI target version'
+grep -Fq 'VERSION_CODE = "10014"' patches/gc14/build_goreecloud_gallery_gc14.py || fail 'gc.14 does not set the current test-build version code'
+grep -Fq 'GLAZE_UI_VERSION = "1.0.0"' patches/gc14/build_goreecloud_gallery_gc14.py || fail 'gc.14 does not identify the Glaze UI target version'
+grep -Fq 'goreecloud_glaze_viewer_actions' patches/gc14/build_goreecloud_gallery_gc14.py || fail 'gc.14 media-viewer overlay contract is missing'
 
 if git ls-files -z | grep -zE '\.(apk|aab|jks|keystore|p12|pfx|pem|key|der)$' >/dev/null; then
   fail 'generated package or key/certificate-container material is tracked in Git'
