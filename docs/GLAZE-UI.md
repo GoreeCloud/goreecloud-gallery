@@ -12,7 +12,7 @@ GoreeCloud Gallery is a GoreeCloud-maintained Android fork. Every Gallery-contro
 - Canonical repository: `GoreeCloud/glaze-ui`
 - Reviewed canonical reference revision: `d6e446fd8ef251259d16368d50aad90d9287a774`
 - Native implementation model: Android platform-native semantic mapping rather than copied web CSS
-- Current Gallery implementation line: `gc.12`
+- Current Gallery implementation line: `gc.13`
 - Permanent Glaze UI exceptions: **none approved**
 
 ## Product identity
@@ -29,6 +29,8 @@ The `gc.11` foundation establishes native resources for Canvas and Canvas Accent
 
 The `gc.12` browsing layer extends those same semantics into the folders screen and opened-folder media screen with adaptive media-aware gutters, Canvas depth, branded menu chrome, Raised empty-state actions, comfortable action targets, and accent loading feedback.
 
+The `gc.13` search layer extends the same browsing composition into global Gallery search, including the shared Canvas, GoreeCloud accent-gradient search/menu chrome, adaptive browsing gutters, and a rounded muted Raised empty-state surface.
+
 These resources are intentionally local. Gallery does not load Glaze UI from a remote runtime, remote font service, icon CDN, analytics dependency, or network-delivered style package.
 
 ## Surface hierarchy
@@ -37,7 +39,7 @@ Gallery uses the Glaze UI hierarchy according to the needs of a media applicatio
 
 - **Canvas** — atmospheric page background behind Gallery-controlled structural surfaces.
 - **Solid** — readability-first content surfaces and platform-native fallback behavior.
-- **Raised** — settings rows, empty-state actions, cards, and important grouped controls with restrained separation.
+- **Raised** — settings rows, empty-state actions and messages, cards, and important grouped controls with restrained separation.
 - **Glaze** — navigation/app-bar emphasis and selected layered presentation where Android can provide the treatment without harming readability or performance.
 - **Overlay** — dialogs, sheets, menus, and other attention-priority surfaces using platform-native Android presentation.
 
@@ -85,6 +87,18 @@ The folder browser and opened-folder media grid are Gallery's highest-frequency 
 
 Browsing insets are intentionally smaller than Settings insets. A media grid is primary content and should remain visually expansive; Glaze UI provides structure and identity without reducing useful media density.
 
+## Search integration
+
+Global Gallery search receives the same media-first Glaze composition in `gc.13`:
+
+- search uses the shared Glaze Canvas and GoreeCloud accent-gradient search/menu chrome;
+- results reuse the gc.12 adaptive browsing gutter contract so search density matches folder and media browsing;
+- the result grid receives restrained bottom breathing room without decorative thumbnail cards;
+- the no-results state uses a muted Raised surface with rounded geometry and a restrained semantic outline rather than floating unstructured text;
+- the search surface remains fully local and introduces no remote UI, font, analytics, advertising, tracking, or network dependency.
+
+This search treatment is intentionally evolutionary rather than a separate visual mode. Search should feel like part of Gallery, not like a detached utility screen.
+
 ## Accepted Gallery-specific visual invariants
 
 The following are release-significant GoreeCloud presentation decisions and must not silently regress:
@@ -99,7 +113,8 @@ The following are release-significant GoreeCloud presentation decisions and must
 - the main folder view and opened media-folder view remain visibly consistent with the accepted GoreeCloud Gallery presentation;
 - primary user-facing Fossify branding does not reappear during upstream synchronization;
 - Settings retains the Glaze Canvas/Raised/Glaze hierarchy and practical target sizing introduced in gc.11;
-- folder and media browsing retain the gc.12 Canvas, adaptive gutter, Raised empty-action, and branded menu semantics without turning thumbnails into decorative cards.
+- folder and media browsing retain the gc.12 Canvas, adaptive gutter, Raised empty-action, and branded menu semantics without turning thumbnails into decorative cards;
+- search retains the gc.13 Canvas, branded search/menu chrome, adaptive browsing composition, and muted Raised empty-state treatment.
 
 Where an invariant can be represented as pure behavior, GoreeCloud-owned automated tests should protect it. Where Android framework rendering, accessibility services, device profiles, permissions, or media operations are required, the corresponding real-device gate remains mandatory.
 
@@ -113,7 +128,7 @@ A surface is not considered Glaze UI compliant merely because its background col
 
 Visual quality does not override accessibility. Stable-release review must include, where applicable, TalkBack identification, meaningful labels for icon-only controls, practical touch-target sizing, readable contrast, large-font and increased-display-size behavior, usable focus order, reduced-motion behavior, and safe solid-surface presentation when advanced effects are unavailable or inappropriate.
 
-The gc.11 Settings treatment and gc.12 browsing actions use 48dp comfortable interactive targets and Android-native ripple feedback. Neither requires blur or transparency for basic readability. Any Glaze UI treatment that materially weakens accessibility must be revised even if it matches the preferred aesthetic.
+The gc.11 Settings treatment and gc.12 browsing actions use 48dp comfortable interactive targets and Android-native ripple feedback. The gc.13 search empty state uses a solid muted Raised surface rather than depending on translucency for readability. Any Glaze UI treatment that materially weakens accessibility must be revised even if it matches the preferred aesthetic.
 
 ## Privacy and dependency boundary
 
@@ -134,6 +149,8 @@ Repository validation must require this contract to remain present. Source valid
 The gc.11 source validation requires the Glaze semantic resource files, light/dark mappings, 44/48dp target contract, four motion timing resources, adaptive Settings insets, Canvas/toolbar/row drawables, application of those resources in Settings, and a local-only dependency boundary.
 
 The gc.12 validation additionally requires adaptive browsing insets, the local Raised empty-action drawable, Canvas and menu treatment on both primary browsing screens, comfortable empty-state action targets, and semantic loading-accent application.
+
+The gc.13 validation additionally requires the search screen to use the shared Canvas, branded toolbar, adaptive browsing insets, local rounded muted empty-state drawable, and current test-build version identity.
 
 The ordinary acceptance workflow must verify that meaningful GoreeCloud-owned JVM tests actually execute. A successful Gradle task with `NO-SOURCE`, missing XML results, zero executed tests, or failing/error tests is not acceptable behavioral-test evidence.
 
