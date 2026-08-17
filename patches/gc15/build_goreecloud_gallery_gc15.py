@@ -62,13 +62,6 @@ def write_surfaces(gallery: Path, commons: Path) -> None:
 </shape>
 """)
 
-    write(drawable / "goreecloud_glaze_dialog_section.xml", """<?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <solid android:color="@color/goreecloud_glaze_surface_muted" />
-    <corners android:radius="@dimen/goreecloud_glaze_radius_md" />
-</shape>
-""")
-
     commons_drawable = commons / "commons/src/main/res/drawable"
     write(commons_drawable / "goreecloud_gallery_popup_bg_light.xml", """<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
@@ -211,7 +204,7 @@ def patch_folder_hierarchy(gallery: Path) -> None:
             view_id = element.attrib.get(aid, "")
             if view_id == "@+id/dir_name":
                 element.set(atc, "@color/goreecloud_glaze_text")
-                element.set(ast, "600")
+                element.set(ast, "bold")
                 element.set(apt, "6dp")
                 found_name = True
             elif view_id == "@+id/photo_cnt":
@@ -265,8 +258,8 @@ def validate(gallery: Path, commons: Path) -> None:
         fail("Settings Glaze header treatment missing")
     if "@color/goreecloud_glaze_text" not in folder_grid or "@color/goreecloud_glaze_muted" not in folder_grid:
         fail("folder primary/secondary semantic hierarchy missing")
-    if "@dimen/smaller_text_size" not in folder_grid:
-        fail("folder-count secondary typography missing")
+    if "@dimen/smaller_text_size" not in folder_grid or 'android:textStyle="bold"' not in folder_grid:
+        fail("folder typography hierarchy missing")
     if "#F4F3FF" not in popup_light or "20dp" not in popup_light:
         fail("light Glaze popup surface missing")
     if "#202333" not in popup_dark or "20dp" not in popup_dark:
