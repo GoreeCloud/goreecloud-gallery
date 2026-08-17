@@ -12,7 +12,7 @@ GoreeCloud Gallery is a GoreeCloud-maintained Android fork. Every Gallery-contro
 - Canonical repository: `GoreeCloud/glaze-ui`
 - Reviewed canonical reference revision: `d6e446fd8ef251259d16368d50aad90d9287a774`
 - Native implementation model: Android platform-native semantic mapping rather than copied web CSS
-- Current Gallery implementation line: `gc.15`
+- Current Gallery implementation line: `gc.16`
 - Permanent Glaze UI exceptions: **none approved**
 
 ## Product identity
@@ -34,6 +34,8 @@ The `gc.13` search layer extends the same browsing composition into global Galle
 The `gc.14` media-viewer layer applies a restrained muted Glaze overlay to full-screen viewer chrome and standardizes visible viewer actions on 48dp comfortable targets while deliberately leaving the photo or video itself visually dominant.
 
 The `gc.15` transient-surface refinement applies the same semantic system to sorting, grouping, filtering, destructive confirmations, overflow menus, and Settings density after representative-device visual review. It replaces generic transient white surfaces with coordinated Glaze light/dark presentation, removes redundant Settings dividers, tightens excessive card spacing, and strengthens the Settings app-bar treatment without changing application behavior.
+
+The `gc.16` dialog-geometry refinement responds to representative-device review of gc.15 by making sorting, grouping, and media-filter dialog ScrollViews measure to their actual content instead of taking the full available dialog height. This keeps the rounded Glaze surface attached to its controls, removes excessive empty space, and preserves scrollability when content genuinely exceeds the available viewport.
 
 These resources are intentionally local. Gallery does not load Glaze UI from a remote runtime, remote font service, icon CDN, analytics dependency, or network-delivered style package.
 
@@ -128,6 +130,8 @@ Representative-device review identified dialogs and popup menus as the strongest
 - toolbar overflow menus use coordinated Glaze light/dark surfaces with rounded geometry and a subtle accent outline instead of visually generic white/dark rectangles;
 - dialog/window styling must not change sorting, grouping, filtering, destructive-operation, permission, or file-operation semantics.
 
+The `gc.16` refinement adds a geometry rule for the same transient surfaces: dialog content must use content-driven height by default and only scroll when the content exceeds the available viewport. A Glaze dialog must not reserve large empty regions merely because its root is scrollable.
+
 Transient surfaces are treated as Overlay-level hierarchy: visually distinct enough to command attention, but not more visually dominant than the media or the action being confirmed.
 
 ## Accepted Gallery-specific visual invariants
@@ -147,7 +151,8 @@ The following are release-significant GoreeCloud presentation decisions and must
 - folder and media browsing retain the gc.12 Canvas, adaptive gutter, Raised empty-action, and branded menu semantics without turning thumbnails into decorative cards;
 - search retains the gc.13 Canvas, branded search/menu chrome, adaptive browsing composition, and muted Raised empty-state treatment;
 - the media viewer retains the gc.14 muted Glaze toolbar/action overlay and comfortable action targets without obscuring primary media or changing destructive-action behavior;
-- transient surfaces retain the gc.15 rounded Glaze dialog/popup treatment, semantic control accents, compact Settings grouping, and unchanged behavioral semantics.
+- transient surfaces retain the gc.15 rounded Glaze dialog/popup treatment, semantic control accents, compact Settings grouping, and unchanged behavioral semantics;
+- sorting, grouping, and media-filter dialogs retain gc.16 content-driven height and scroll only when required by available space.
 
 Where an invariant can be represented as pure behavior, GoreeCloud-owned automated tests should protect it. Where Android framework rendering, accessibility services, device profiles, permissions, or media operations are required, the corresponding real-device gate remains mandatory.
 
@@ -161,7 +166,7 @@ A surface is not considered Glaze UI compliant merely because its background col
 
 Visual quality does not override accessibility. Stable-release review must include, where applicable, TalkBack identification, meaningful labels for icon-only controls, practical touch-target sizing, readable contrast, large-font and increased-display-size behavior, usable focus order, reduced-motion behavior, and safe solid-surface presentation when advanced effects are unavailable or inappropriate.
 
-The gc.11 Settings treatment, gc.12 browsing actions, gc.14 media-viewer controls, and gc.15 dialog controls use 48dp comfortable interactive targets. The gc.13 search empty state, gc.14 viewer overlay, and gc.15 dialogs use solid semantic surfaces rather than depending on translucency for readability. Any Glaze UI treatment that materially weakens accessibility must be revised even if it matches the preferred aesthetic.
+The gc.11 Settings treatment, gc.12 browsing actions, gc.14 media-viewer controls, and gc.15 dialog controls use 48dp comfortable interactive targets. The gc.13 search empty state, gc.14 viewer overlay, and gc.15 dialogs use solid semantic surfaces rather than depending on translucency for readability. gc.16 keeps those dialog surfaces content-sized while preserving scrollability for large-font or constrained-height cases. Any Glaze UI treatment that materially weakens accessibility must be revised even if it matches the preferred aesthetic.
 
 ## Privacy and dependency boundary
 
@@ -188,6 +193,8 @@ The gc.13 validation additionally requires the search screen to use the shared C
 The gc.14 validation additionally requires the full-screen media viewer to use the muted Glaze toolbar surface, local rounded viewer-action overlay, at least eight comfortable viewer action targets, current version identity, and the local-only resource boundary.
 
 The gc.15 validation additionally requires rounded Glaze surfaces on sorting/grouping/filter dialogs, semantic accent and comfortable targets on their controls, semantic danger presentation for destructive warnings, reduced redundant Settings dividers, reinforced Settings header treatment, coordinated light/dark popup surfaces, current version identity, and preservation of the local-only resource boundary.
+
+The gc.16 validation additionally requires sorting, grouping, and media-filter dialog roots to use `wrap_content` height, disable forced viewport filling, retain overflow scrolling when needed, preserve the gc.15 Glaze surface, and carry the current test-build version identity.
 
 The ordinary acceptance workflow must verify that meaningful GoreeCloud-owned JVM tests actually execute. A successful Gradle task with `NO-SOURCE`, missing XML results, zero executed tests, or failing/error tests is not acceptable behavioral-test evidence.
 
