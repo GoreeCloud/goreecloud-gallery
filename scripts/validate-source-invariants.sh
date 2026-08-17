@@ -51,7 +51,7 @@ POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup
 POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
 
 grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Acceptance-candidate version name is not 1.0.0"
-grep -Fqx 'VERSION_CODE=10015' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10015"
+grep -Fqx 'VERSION_CODE=10016' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10016"
 grep -Fq 'Stable-candidate binary identity' "$NOTICE" || fail "Stable-candidate release boundary is missing from notice"
 grep -Fq 'Stable classification is not automatic' "$NOTICE" || fail "Stable classification boundary is missing from notice"
 grep -Fq 'gc.10 simplifies Settings' "$NOTICE" || fail "gc.10 settings-cleanup notice is missing"
@@ -60,6 +60,7 @@ grep -Fq 'gc.12 extends the native Glaze UI 1.0.0 mapping' "$NOTICE" || fail "gc
 grep -Fq 'gc.13 extends the native Glaze UI 1.0.0 mapping to Gallery search' "$NOTICE" || fail "gc.13 search Glaze UI notice is missing"
 grep -Fq 'gc.14 extends the native Glaze UI 1.0.0 mapping to the full-screen media viewer' "$NOTICE" || fail "gc.14 viewer Glaze UI notice is missing"
 grep -Fq 'gc.15 refines the native Glaze UI 1.0.0 mapping' "$NOTICE" || fail "gc.15 transient Glaze UI notice is missing"
+grep -Fq 'gc.16 refines the gc.15 Glaze transient-surface implementation' "$NOTICE" || fail "gc.16 dialog-geometry notice is missing"
 
 ! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" || fail "legacy counterfeit-build warning remains in Commons source"
 ! grep -R -Fq "download the original one from www.fossify.org. Thanks" "$COMMONS_MAIN" || fail "legacy Fossify download warning remains in Commons source"
@@ -139,6 +140,9 @@ for layout in "$SORTING_LAYOUT" "$GROUPING_LAYOUT" "$FILTER_LAYOUT"; do
   grep -Fq '@drawable/goreecloud_glaze_dialog_surface' "$layout" || fail "Glaze dialog surface is missing"
   grep -Fq '@color/goreecloud_glaze_accent' "$layout" || fail "Glaze semantic control accent is missing"
   grep -Fq '@dimen/goreecloud_glaze_target_comfortable' "$layout" || fail "Glaze comfortable dialog targets are missing"
+  grep -Fq 'android:layout_height="wrap_content"' "$layout" || fail "gc.16 compact dialog height is missing"
+  grep -Fq 'android:fillViewport="false"' "$layout" || fail "gc.16 dialog viewport must remain content-driven"
+  grep -Fq 'android:overScrollMode="ifContentScrolls"' "$layout" || fail "gc.16 dialog overflow scrolling is missing"
 done
 grep -Fq '@color/goreecloud_glaze_danger' "$CONFIRM_DELETE_LAYOUT" || fail "Glaze destructive dialog warning color is missing"
 grep -Fq '@color/goreecloud_glaze_surface' "$GLAZE_DIALOG_SURFACE" || fail "Glaze dialog semantic surface is missing"
@@ -161,4 +165,4 @@ grep -Fq '#F4F3FF' "$POPUP_LIGHT" || fail "gc.15 light Glaze popup surface is mi
 grep -Fq '#202333' "$POPUP_DARK" || fail "gc.15 dark Glaze popup surface is missing"
 grep -Fq '20dp' "$POPUP_LIGHT" || fail "gc.15 popup rounded geometry is missing"
 
-printf 'GoreeCloud Gallery 1.0.0 gc.15 Glaze UI source acceptance invariants passed.\n'
+printf 'GoreeCloud Gallery 1.0.0 gc.16 Glaze UI source acceptance invariants passed.\n'
