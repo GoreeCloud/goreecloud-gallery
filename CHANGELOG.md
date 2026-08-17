@@ -13,7 +13,8 @@ This changelog records material source, build, validation, release-engineering, 
 - gc.10 Settings cleanup and Android-native Privacy & permissions access;
 - gc.11 native Glaze UI 1.0 semantic resources, adaptive Settings composition, practical target sizing, and fail-closed conformance checks;
 - gc.12 Glaze UI browsing-surface integration for the folders screen and opened-folder media grid;
-- gc.13 Glaze UI search-surface integration with shared Canvas, branded search chrome, adaptive browsing gutters, and a rounded muted empty-state surface.
+- gc.13 Glaze UI search-surface integration with shared Canvas, branded search chrome, adaptive browsing gutters, and a rounded muted empty-state surface;
+- gc.14 Glaze UI media-viewer overlay treatment with muted semantic chrome and comfortable viewer action targets.
 
 ### Changed
 
@@ -23,11 +24,14 @@ This changelog records material source, build, validation, release-engineering, 
 - gc.11 increments Android `VERSION_CODE` to `10011` while preserving semantic version `1.0.0`;
 - gc.12 increments Android `VERSION_CODE` to `10012` while preserving semantic version `1.0.0`;
 - gc.13 increments Android `VERSION_CODE` to `10013` while preserving semantic version `1.0.0`;
+- gc.14 increments Android `VERSION_CODE` to `10014` while preserving semantic version `1.0.0`;
 - Settings uses Glaze Canvas, gradient navigation emphasis, rounded Raised rows, Android ripple feedback, 48dp comfortable interactive targets, dedicated light/dark semantic palettes, and wider native insets at `sw600dp` and `sw840dp`;
 - primary browsing surfaces use the Glaze Canvas, branded menu chrome, adaptive 8/16/24dp media-aware gutters, Raised empty-state actions, comfortable action targets, and semantic loading accent without cardifying every thumbnail;
-- search now reuses the same browsing composition and adds a restrained muted Raised empty state so search visually belongs to the same Glaze family as folders and media;
+- search reuses the same browsing composition and adds a restrained muted Raised empty state so search visually belongs to the same Glaze family as folders and media;
+- the full-screen media viewer uses restrained muted Glaze chrome and a rounded bottom action overlay while keeping the media itself visually dominant;
+- viewer actions use 48dp comfortable target sizing without altering the behavior of delete or other destructive operations;
 - Gallery records Glaze UI `1.0.0` and canonical reference revision `d6e446fd8ef251259d16368d50aad90d9287a774` as its native conformance target;
-- repository/source validation requires the current Glaze patch line and fails closed if the semantic resource, Settings, browsing-surface, or search integration contract disappears;
+- repository/source validation requires the current Glaze patch line and fails closed if the semantic resource, Settings, browsing-surface, search, or media-viewer integration contract disappears;
 - Stable promotion must reuse the exact accepted signed binary rather than rebuilding merely to alter release labeling.
 
 ### Validated
@@ -36,7 +40,8 @@ This changelog records material source, build, validation, release-engineering, 
 - gc.10 exact-head and post-merge validation passed after Settings simplification and produced the updated acceptance APK from `main`;
 - gc.11 exact-head run 31973570278 and post-merge main run 31977767072 completed successfully through repository/security/source validation, behavioral tests, Android lint, APK assembly, APK/evidence validation, and artifact upload;
 - gc.12 exact-head run 31978012920 and post-merge main run 31978605284 completed successfully through every acceptance step; PR #16 was squash merged as `1e1099246fb771508be16a8423771a66f6b9055d`;
-- gc.13 requires its own exact-head acceptance run before merge because it changes the search layout, local drawable resources, patch provenance, and versionCode.
+- gc.13 exact-head run 31980042523 completed successfully through every acceptance step and PR #17 was squash merged as `87f87ecdca9317d4acf3cd9a8d74a766eb5dd060`; post-merge run 31982557178 was still in progress when gc.14 work began;
+- gc.14 requires its own exact-head acceptance run before merge because it changes media-viewer layouts, local drawable resources, patch provenance, conformance validation, and versionCode.
 
 ### Release boundary
 
