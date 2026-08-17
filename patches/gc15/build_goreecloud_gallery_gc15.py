@@ -174,7 +174,6 @@ def patch_settings(gallery: Path) -> None:
 
     row_count = 0
     toolbar_count = 0
-    divider_count = 0
     for element in root.iter():
         view_id = element.attrib.get(aid, "")
         tag = element.tag
@@ -190,18 +189,47 @@ def patch_settings(gallery: Path) -> None:
             row_count += 1
         if "divider" in view_id and view_id.startswith("@+id/settings_"):
             element.set(avis, "gone")
-            divider_count += 1
     if row_count < 10 or toolbar_count == 0:
         fail(f"settings refinement incomplete: rows={row_count}, toolbars={toolbar_count}")
     ET.indent(tree, space="    ")
     tree.write(path, encoding="unicode", xml_declaration=True)
 
 
+def patch_folder_hierarchy(gallery: Path) -> None:
+    for name in ("directory_item_grid_rounded_corners.xml", "directory_item_list.xml"):
+        path = gallery / "app/src/main/res/layout" / name
+        tree = ET.parse(path)
+        root = tree.getroot()
+        aid = f"{{{ANDROID_NS}}}id"
+        atc = f"{{{ANDROID_NS}}}textColor"
+        ats = f"{{{ANDROID_NS}}}textSize"
+        ast = f"{{{ANDROID_NS}}}textStyle"
+        apt = f"{{{ANDROID_NS}}}paddingTop"
+        found_name = False
+        found_count = False
+        for element in root.iter():
+            view_id = element.attrib.get(aid, "")
+            if view_id == "@+id/dir_name":
+                element.set(atc, "@color/goreecloud_glaze_text")
+                element.set(ast, "600")
+                element.set(apt, "6dp")
+                found_name = True
+            elif view_id == "@+id/photo_cnt":
+                element.set(atc, "@color/goreecloud_glaze_muted")
+                element.set(ats, "@dimen/smaller_text_size")
+                element.set(apt, "2dp")
+                found_count = True
+        if not found_name or not found_count:
+            fail(f"folder hierarchy views missing in {name}")
+        ET.indent(tree, space="    ")
+        tree.write(path, encoding="unicode", xml_declaration=True)
+
+
 def update_notice(gallery: Path) -> None:
     path = gallery / "GOREECLOUD-NOTICE.md"
     notice = read(path).rstrip() + f"""
 
-gc.15 refines the native Glaze UI {GLAZE_UI_VERSION} mapping using canonical reference revision {GLAZE_UI_REFERENCE} in response to representative-device visual review. Sorting, grouping, filter, and destructive confirmation surfaces now use local rounded Glaze presentation with semantic accents and comfortable controls; overflow menus use coordinated light/dark Glaze popup surfaces; Settings reduces redundant dividers and excessive card spacing while strengthening its Glaze app-bar treatment. Existing media density, permission behavior, sorting/grouping semantics, destructive confirmations, privacy boundaries, and offline operation remain unchanged.
+gc.15 refines the native Glaze UI {GLAZE_UI_VERSION} mapping using canonical reference revision {GLAZE_UI_REFERENCE} in response to representative-device visual review. Sorting, grouping, filter, and destructive confirmation surfaces now use local rounded Glaze presentation with semantic accents and comfortable controls; overflow menus use coordinated light/dark Glaze popup surfaces; Settings reduces redundant dividers and excessive card spacing while strengthening its Glaze app-bar treatment; folder names and item counts use stronger primary/secondary semantic hierarchy. Existing media density, permission behavior, sorting/grouping semantics, destructive confirmations, privacy boundaries, and offline operation remain unchanged.
 """
     write(path, notice)
     write(gallery / "app/src/main/assets/goreecloud_notice.txt", notice)
@@ -214,6 +242,7 @@ def validate(gallery: Path, commons: Path) -> None:
     grouping = read(gallery / "app/src/main/res/layout/dialog_change_grouping.xml")
     filtering = read(gallery / "app/src/main/res/layout/dialog_filter_media.xml")
     confirm = read(gallery / "app/src/main/res/layout/dialog_confirm_delete_folder.xml")
+    folder_grid = read(gallery / "app/src/main/res/layout/directory_item_grid_rounded_corners.xml")
     popup_light = read(commons / "commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml")
     popup_dark = read(commons / "commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml")
     notice = read(gallery / "GOREECLOUD-NOTICE.md")
@@ -234,6 +263,10 @@ def validate(gallery: Path, commons: Path) -> None:
         fail("redundant Settings dividers were not reduced")
     if "@drawable/goreecloud_glaze_toolbar" not in settings:
         fail("Settings Glaze header treatment missing")
+    if "@color/goreecloud_glaze_text" not in folder_grid or "@color/goreecloud_glaze_muted" not in folder_grid:
+        fail("folder primary/secondary semantic hierarchy missing")
+    if "@dimen/smaller_text_size" not in folder_grid:
+        fail("folder-count secondary typography missing")
     if "#F4F3FF" not in popup_light or "20dp" not in popup_light:
         fail("light Glaze popup surface missing")
     if "#202333" not in popup_dark or "20dp" not in popup_dark:
@@ -256,6 +289,7 @@ def main() -> None:
     patch_confirm_delete(gallery)
     patch_dialog_windows(gallery)
     patch_settings(gallery)
+    patch_folder_hierarchy(gallery)
     update_notice(gallery)
     validate(gallery, commons)
     print(f"Applied GoreeCloud Gallery gc.15 Glaze transient/settings refinement: {VERSION_NAME} ({VERSION_CODE}).")
