@@ -28,6 +28,10 @@ VIEWER_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_medium.xml"
 VIEWER_ACTIONS="$GALLERY_DIR/app/src/main/res/layout/bottom_actions.xml"
 SETTINGS_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_settings.xml"
 SETTINGS_STRINGS="$GALLERY_DIR/app/src/main/res/values/strings.xml"
+SORTING_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_sorting.xml"
+GROUPING_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_grouping.xml"
+FILTER_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_filter_media.xml"
+CONFIRM_DELETE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_confirm_delete_folder.xml"
 GLAZE_VALUES="$GALLERY_DIR/app/src/main/res/values/goreecloud_glaze.xml"
 GLAZE_NIGHT="$GALLERY_DIR/app/src/main/res/values-night/goreecloud_glaze.xml"
 GLAZE_SW600="$GALLERY_DIR/app/src/main/res/values-sw600dp/goreecloud_glaze.xml"
@@ -38,6 +42,7 @@ GLAZE_ITEM="$GALLERY_DIR/app/src/main/res/drawable/goreecloud_glaze_settings_ite
 GLAZE_EMPTY_ACTION="$GALLERY_DIR/app/src/main/res/drawable/goreecloud_glaze_empty_action.xml"
 GLAZE_EMPTY_STATE="$GALLERY_DIR/app/src/main/res/drawable/goreecloud_glaze_empty_state.xml"
 GLAZE_VIEWER_ACTIONS="$GALLERY_DIR/app/src/main/res/drawable/goreecloud_glaze_viewer_actions.xml"
+GLAZE_DIALOG_SURFACE="$GALLERY_DIR/app/src/main/res/drawable/goreecloud_glaze_dialog_surface.xml"
 FILE_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_file_thumbnail_style.xml"
 FOLDER_STYLE_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/dialog_change_folder_thumbnail_style.xml"
 SEARCH_MENU="$COMMONS_DIR/commons/src/main/kotlin/org/fossify/commons/views/MySearchMenu.kt"
@@ -46,7 +51,7 @@ POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup
 POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
 
 grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Acceptance-candidate version name is not 1.0.0"
-grep -Fqx 'VERSION_CODE=10014' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10014"
+grep -Fqx 'VERSION_CODE=10015' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10015"
 grep -Fq 'Stable-candidate binary identity' "$NOTICE" || fail "Stable-candidate release boundary is missing from notice"
 grep -Fq 'Stable classification is not automatic' "$NOTICE" || fail "Stable classification boundary is missing from notice"
 grep -Fq 'gc.10 simplifies Settings' "$NOTICE" || fail "gc.10 settings-cleanup notice is missing"
@@ -54,6 +59,7 @@ grep -Fq 'gc.11 deepens the native Android mapping to Glaze UI 1.0.0' "$NOTICE" 
 grep -Fq 'gc.12 extends the native Glaze UI 1.0.0 mapping' "$NOTICE" || fail "gc.12 browsing Glaze UI notice is missing"
 grep -Fq 'gc.13 extends the native Glaze UI 1.0.0 mapping to Gallery search' "$NOTICE" || fail "gc.13 search Glaze UI notice is missing"
 grep -Fq 'gc.14 extends the native Glaze UI 1.0.0 mapping to the full-screen media viewer' "$NOTICE" || fail "gc.14 viewer Glaze UI notice is missing"
+grep -Fq 'gc.15 refines the native Glaze UI 1.0.0 mapping' "$NOTICE" || fail "gc.15 transient Glaze UI notice is missing"
 
 ! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" || fail "legacy counterfeit-build warning remains in Commons source"
 ! grep -R -Fq "download the original one from www.fossify.org. Thanks" "$COMMONS_MAIN" || fail "legacy Fossify download warning remains in Commons source"
@@ -81,7 +87,7 @@ grep -Fq '@string/goreecloud_android_app_permissions' "$SETTINGS_LAYOUT" || fail
 grep -Fq 'name="goreecloud_privacy_permissions"' "$SETTINGS_STRINGS" || fail "privacy section string is missing"
 grep -Fq 'name="goreecloud_android_app_permissions"' "$SETTINGS_STRINGS" || fail "Android app-permissions string is missing"
 
-for path in "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_SW600" "$GLAZE_SW840" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" "$GLAZE_EMPTY_ACTION" "$GLAZE_EMPTY_STATE" "$GLAZE_VIEWER_ACTIONS"; do
+for path in "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_SW600" "$GLAZE_SW840" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" "$GLAZE_EMPTY_ACTION" "$GLAZE_EMPTY_STATE" "$GLAZE_VIEWER_ACTIONS" "$GLAZE_DIALOG_SURFACE"; do
   [ -f "$path" ] || fail "missing Glaze UI native resource: $path"
 done
 grep -Fq 'goreecloud_glaze_target_minimum">44dp' "$GLAZE_VALUES" || fail "Glaze 44dp minimum target is missing"
@@ -102,6 +108,7 @@ grep -Fq '@drawable/goreecloud_glaze_toolbar' "$SETTINGS_LAYOUT" || fail "Glaze 
 grep -Fq '@drawable/goreecloud_glaze_settings_item' "$SETTINGS_LAYOUT" || fail "Glaze raised setting rows are not applied"
 grep -Fq '@dimen/goreecloud_glaze_target_comfortable' "$SETTINGS_LAYOUT" || fail "Glaze comfortable target size is not applied"
 grep -Fq '@dimen/goreecloud_glaze_settings_horizontal_inset' "$SETTINGS_LAYOUT" || fail "Glaze adaptive inset is not applied"
+[ "$(grep -Fc 'android:visibility="gone"' "$SETTINGS_LAYOUT")" -ge 2 ] || fail "redundant Settings dividers were not reduced"
 
 for layout in "$MAIN_LAYOUT" "$MEDIA_LAYOUT"; do
   grep -Fq '@drawable/goreecloud_glaze_canvas' "$layout" || fail "Glaze canvas is missing from a primary browsing surface"
@@ -128,9 +135,18 @@ grep -Fq '@drawable/goreecloud_glaze_viewer_actions' "$VIEWER_ACTIONS" || fail "
 grep -Fq '@color/goreecloud_glaze_surface_muted' "$GLAZE_VIEWER_ACTIONS" || fail "Glaze media-viewer muted surface is missing"
 grep -Fq '@color/goreecloud_glaze_line' "$GLAZE_VIEWER_ACTIONS" || fail "Glaze media-viewer outline is missing"
 
+for layout in "$SORTING_LAYOUT" "$GROUPING_LAYOUT" "$FILTER_LAYOUT"; do
+  grep -Fq '@drawable/goreecloud_glaze_dialog_surface' "$layout" || fail "Glaze dialog surface is missing"
+  grep -Fq '@color/goreecloud_glaze_accent' "$layout" || fail "Glaze semantic control accent is missing"
+  grep -Fq '@dimen/goreecloud_glaze_target_comfortable' "$layout" || fail "Glaze comfortable dialog targets are missing"
+done
+grep -Fq '@color/goreecloud_glaze_danger' "$CONFIRM_DELETE_LAYOUT" || fail "Glaze destructive dialog warning color is missing"
+grep -Fq '@color/goreecloud_glaze_surface' "$GLAZE_DIALOG_SURFACE" || fail "Glaze dialog semantic surface is missing"
+grep -Fq '@color/goreecloud_glaze_line' "$GLAZE_DIALOG_SURFACE" || fail "Glaze dialog semantic outline is missing"
+
 # Android XML namespace declarations use the standard http://schemas.android.com URI;
 # reject actual network-delivered UI references without treating that namespace as a dependency.
-! grep -R -Eq 'https://|src="http://|href="http://|@font/.*remote' "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" "$GLAZE_EMPTY_ACTION" "$GLAZE_EMPTY_STATE" "$GLAZE_VIEWER_ACTIONS" || fail "Glaze UI resources introduced a remote dependency"
+! grep -R -Eq 'https://|src="http://|href="http://|@font/.*remote' "$GLAZE_VALUES" "$GLAZE_NIGHT" "$GLAZE_CANVAS" "$GLAZE_TOOLBAR" "$GLAZE_ITEM" "$GLAZE_EMPTY_ACTION" "$GLAZE_EMPTY_STATE" "$GLAZE_VIEWER_ACTIONS" "$GLAZE_DIALOG_SURFACE" || fail "Glaze UI resources introduced a remote dependency"
 
 ! grep -Fq 'dialog_file_style_rounded_corners' "$FILE_STYLE_LAYOUT" || fail "removed file-style control returned"
 ! grep -Fq 'dialog_radio_folder_square' "$FOLDER_STYLE_LAYOUT" || fail "removed square-folder control returned"
@@ -141,7 +157,8 @@ grep -Fq 'R.style.GoreeCloudGalleryPopupThemeLight' "$SEARCH_MENU" || fail "ligh
 grep -Fq 'R.style.GoreeCloudGalleryPopupThemeDark' "$SEARCH_MENU" || fail "dark popup theme is missing"
 [ "$(grep -Fc 'updatePopupTheme()' "$SEARCH_MENU")" -ge 2 ] || fail "popup theme is not refreshed in all accepted paths"
 grep -Fq 'app:popupTheme="@style/GoreeCloudGalleryPopupThemeLight"' "$SEARCH_LAYOUT" || fail "default toolbar popup theme is missing"
-grep -Fq '#F7F8FC' "$POPUP_LIGHT" || fail "accepted light popup surface is missing"
-grep -Fq '#171C29' "$POPUP_DARK" || fail "accepted dark popup surface is missing"
+grep -Fq '#F4F3FF' "$POPUP_LIGHT" || fail "gc.15 light Glaze popup surface is missing"
+grep -Fq '#202333' "$POPUP_DARK" || fail "gc.15 dark Glaze popup surface is missing"
+grep -Fq '20dp' "$POPUP_LIGHT" || fail "gc.15 popup rounded geometry is missing"
 
-printf 'GoreeCloud Gallery 1.0.0 gc.14 Glaze UI source acceptance invariants passed.\n'
+printf 'GoreeCloud Gallery 1.0.0 gc.15 Glaze UI source acceptance invariants passed.\n'
