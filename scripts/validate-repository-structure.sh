@@ -22,6 +22,7 @@ required_files=(
   docs/ARCHITECTURE.md
   docs/BUILD-AND-RELEASE.md
   docs/GLAZE-UI.md
+  docs/GC17-DEVICE-ACCEPTANCE-FIXES.md
   docs/RELEASE-SIGNING.md
   docs/STABLE-SIGNING-RUNBOOK.md
   docs/REAL-DEVICE-ACCEPTANCE-RUNBOOK.md
@@ -70,9 +71,12 @@ grep -Fq 'Glaze UI architecture' docs/ARCHITECTURE.md || fail 'architecture does
 grep -Fq 'GoreeCloud Gallery Glaze UI Contract' docs/GLAZE-UI.md || fail 'Glaze UI contract does not identify its Gallery scope'
 grep -Fq 'Target design system: **Glaze UI 1.0.0**' docs/GLAZE-UI.md || fail 'Glaze UI target version is not documented'
 grep -Fq 'd6e446fd8ef251259d16368d50aad90d9287a774' docs/GLAZE-UI.md || fail 'canonical Glaze UI reference revision is not documented'
-grep -Fq 'Current Gallery implementation line: `gc.17`' docs/GLAZE-UI.md || fail 'gc.17 Glaze UI implementation line is not documented'
+grep -Fq 'Current Gallery implementation line: `gc.16`' docs/GLAZE-UI.md || fail 'merged Glaze UI baseline is not documented'
 grep -Fq 'No permanent Glaze UI exception is approved' docs/GLAZE-UI.md || fail 'Glaze UI exception boundary is not documented'
 grep -Fq 'meaningful GoreeCloud-owned JVM tests actually execute' docs/GLAZE-UI.md || fail 'Glaze UI contract does not preserve behavioral-test evidence requirements'
+grep -Fq 'The third finding is a functional defect' docs/GC17-DEVICE-ACCEPTANCE-FIXES.md || fail 'gc.17 functional regression record is incomplete'
+grep -Fq 'deleteEmptyFolders' docs/GC17-DEVICE-ACCEPTANCE-FIXES.md || fail 'gc.17 explicit delete regression is not documented'
+grep -Fq 'overflow text is readable' docs/GC17-DEVICE-ACCEPTANCE-FIXES.md || fail 'gc.17 popup device gate is not documented'
 grep -Fq 'GoreeCloud Gallery Stable Signing Runbook' docs/STABLE-SIGNING-RUNBOOK.md || fail 'stable signing runbook does not identify its Gallery scope'
 grep -Fq 'GoreeCloud Gallery Real-Device Acceptance Runbook' docs/REAL-DEVICE-ACCEPTANCE-RUNBOOK.md || fail 'real-device runbook does not identify its Gallery scope'
 grep -Fq 'GoreeCloud Gallery 1.0.0 Stable Candidate' docs/STABLE-CANDIDATE-1.0.0.md || fail 'Stable candidate contract does not identify the final candidate'
