@@ -122,15 +122,18 @@ def inject_style_items(content: str, style_name: str, items: tuple[str, ...]) ->
         return content, False
 
     body = match.group(2)
-    additions = []
     for item in items:
         attr_name = item.split('name="', 1)[1].split('"', 1)[0]
-        if f'name="{attr_name}"' not in body:
-            additions.append(f"\n        {item}")
-    if not additions:
-        return content, True
+        item_pattern = re.compile(
+            rf'<item\s+name="{re.escape(attr_name)}"\s*>.*?</item>',
+            re.S,
+        )
+        if item_pattern.search(body):
+            body = item_pattern.sub(item, body, count=1)
+        else:
+            body = body.rstrip() + f"\n        {item}\n"
 
-    replacement = match.group(1) + body.rstrip() + "".join(additions) + "\n    " + match.group(3)
+    replacement = match.group(1) + body + match.group(3)
     return content[: match.start()] + replacement + content[match.end() :], True
 
 
