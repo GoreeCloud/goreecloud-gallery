@@ -18,7 +18,9 @@ NOTICE="$GALLERY_DIR/GOREECLOUD-NOTICE.md"
 CONFIG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/Config.kt"
 POLICY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicy.kt"
 POLICY_TEST="$GALLERY_DIR/app/src/test/kotlin/org/fossify/gallery/helpers/GoreeCloudGalleryPolicyTest.kt"
+MAIN_ACTIVITY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/activities/MainActivity.kt"
 SETTINGS_ACTIVITY="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/activities/SettingsActivity.kt"
+CONFIRM_DELETE_CLASS="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ConfirmDeleteFolderDialog.kt"
 FILE_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFileThumbnailStyleDialog.kt"
 FOLDER_STYLE_DIALOG="$GALLERY_DIR/app/src/main/kotlin/org/fossify/gallery/dialogs/ChangeFolderThumbnailStyleDialog.kt"
 MAIN_LAYOUT="$GALLERY_DIR/app/src/main/res/layout/activity_main.xml"
@@ -49,9 +51,10 @@ SEARCH_MENU="$COMMONS_DIR/commons/src/main/kotlin/org/fossify/commons/views/MySe
 SEARCH_LAYOUT="$COMMONS_DIR/commons/src/main/res/layout/menu_search.xml"
 POPUP_LIGHT="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_light.xml"
 POPUP_DARK="$COMMONS_DIR/commons/src/main/res/drawable/goreecloud_gallery_popup_bg_dark.xml"
+COMMONS_VALUES="$COMMONS_DIR/commons/src/main/res/values"
 
 grep -Fqx 'VERSION_NAME=1.0.0' "$PROPERTIES" || fail "Acceptance-candidate version name is not 1.0.0"
-grep -Fqx 'VERSION_CODE=10016' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10016"
+grep -Fqx 'VERSION_CODE=10017' "$PROPERTIES" || fail "Acceptance-candidate version code is not 10017"
 grep -Fq 'Stable-candidate binary identity' "$NOTICE" || fail "Stable-candidate release boundary is missing from notice"
 grep -Fq 'Stable classification is not automatic' "$NOTICE" || fail "Stable classification boundary is missing from notice"
 grep -Fq 'gc.10 simplifies Settings' "$NOTICE" || fail "gc.10 settings-cleanup notice is missing"
@@ -61,6 +64,7 @@ grep -Fq 'gc.13 extends the native Glaze UI 1.0.0 mapping to Gallery search' "$N
 grep -Fq 'gc.14 extends the native Glaze UI 1.0.0 mapping to the full-screen media viewer' "$NOTICE" || fail "gc.14 viewer Glaze UI notice is missing"
 grep -Fq 'gc.15 refines the native Glaze UI 1.0.0 mapping' "$NOTICE" || fail "gc.15 transient Glaze UI notice is missing"
 grep -Fq 'gc.16 refines the gc.15 Glaze transient-surface implementation' "$NOTICE" || fail "gc.16 dialog-geometry notice is missing"
+grep -Fq 'gc.17 responds to representative-device acceptance findings' "$NOTICE" || fail "gc.17 acceptance-fix notice is missing"
 
 ! grep -R -Fq "You are using a fake version of the app" "$COMMONS_MAIN" || fail "legacy counterfeit-build warning remains in Commons source"
 ! grep -R -Fq "download the original one from www.fossify.org. Thanks" "$COMMONS_MAIN" || fail "legacy Fossify download warning remains in Commons source"
@@ -145,6 +149,12 @@ for layout in "$SORTING_LAYOUT" "$GROUPING_LAYOUT" "$FILTER_LAYOUT"; do
   grep -Fq 'android:overScrollMode="ifContentScrolls"' "$layout" || fail "gc.16 dialog overflow scrolling is missing"
 done
 grep -Fq '@color/goreecloud_glaze_danger' "$CONFIRM_DELETE_LAYOUT" || fail "Glaze destructive dialog warning color is missing"
+grep -Fq 'android:layout_height="wrap_content"' "$CONFIRM_DELETE_LAYOUT" || fail "gc.17 confirm-delete dialog is not content-driven"
+grep -Fq 'android:background="@android:color/transparent"' "$CONFIRM_DELETE_LAYOUT" || fail "gc.17 confirm-delete content background is not window-owned"
+grep -Fq 'R.drawable.goreecloud_glaze_dialog_surface' "$CONFIRM_DELETE_CLASS" || fail "gc.17 confirm-delete window surface is missing"
+grep -Fq 'AlertDialog.BUTTON_POSITIVE' "$CONFIRM_DELETE_CLASS" || fail "gc.17 destructive button styling is missing"
+grep -Fq 'the user explicitly chose to delete is left behind as an empty shell' "$MAIN_ACTIVITY" || fail "gc.17 explicit-folder deletion contract is missing"
+! sed -n '/private fun deleteFilteredFileDirItems/,/private fun setupLayoutManager/p' "$MAIN_ACTIVITY" | grep -Fq 'if (config.deleteEmptyFolders)' || fail "gc.17 explicit folder deletion still depends on deleteEmptyFolders"
 grep -Fq '@color/goreecloud_glaze_surface' "$GLAZE_DIALOG_SURFACE" || fail "Glaze dialog semantic surface is missing"
 grep -Fq '@color/goreecloud_glaze_line' "$GLAZE_DIALOG_SURFACE" || fail "Glaze dialog semantic outline is missing"
 
@@ -161,8 +171,10 @@ grep -Fq 'R.style.GoreeCloudGalleryPopupThemeLight' "$SEARCH_MENU" || fail "ligh
 grep -Fq 'R.style.GoreeCloudGalleryPopupThemeDark' "$SEARCH_MENU" || fail "dark popup theme is missing"
 [ "$(grep -Fc 'updatePopupTheme()' "$SEARCH_MENU")" -ge 2 ] || fail "popup theme is not refreshed in all accepted paths"
 grep -Fq 'app:popupTheme="@style/GoreeCloudGalleryPopupThemeLight"' "$SEARCH_LAYOUT" || fail "default toolbar popup theme is missing"
-grep -Fq '#F4F3FF' "$POPUP_LIGHT" || fail "gc.15 light Glaze popup surface is missing"
-grep -Fq '#202333' "$POPUP_DARK" || fail "gc.15 dark Glaze popup surface is missing"
-grep -Fq '20dp' "$POPUP_LIGHT" || fail "gc.15 popup rounded geometry is missing"
+grep -Fq '#F4F3FF' "$POPUP_LIGHT" || fail "gc.17 light Glaze popup surface is missing"
+grep -Fq '#202333' "$POPUP_DARK" || fail "gc.17 dark Glaze popup surface is missing"
+grep -Fq '20dp' "$POPUP_LIGHT" || fail "gc.17 popup rounded geometry is missing"
+grep -R -Fq '#F3F6FB' "$COMMONS_VALUES" || fail "gc.17 readable dark-popup foreground is missing"
+grep -R -Fq '#172033' "$COMMONS_VALUES" || fail "gc.17 readable light-popup foreground is missing"
 
-printf 'GoreeCloud Gallery 1.0.0 gc.16 Glaze UI source acceptance invariants passed.\n'
+printf 'GoreeCloud Gallery 1.0.0 gc.17 source acceptance invariants passed.\n'
