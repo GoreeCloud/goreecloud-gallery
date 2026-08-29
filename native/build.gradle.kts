@@ -1,4 +1,2 @@
-plugins {
-    id("com.android.library") version "8.10.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.20" apply false
-}
+// Plugin versions are owned by settings.gradle.kts pluginManagement so the JVM core and Android
+// adapter resolve Kotlin consistently without preloading one Kotlin plugin onto the root classpath.
