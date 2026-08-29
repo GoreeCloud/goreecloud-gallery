@@ -8,14 +8,19 @@ The application uses the established `com.goreecloud.gallery` package identity a
 
 ## Permission and local-media authority
 
-The shell does not query MediaStore before Android grants readable media access.
+The shell does not query MediaStore before Android grants readable media access. The application now resolves permission state into an explicit access scope rather than a single boolean so partial authority is not presented as full-library authority.
 
-- Android 13+ requests image/video media permissions.
-- Android 14+ also declares selected-media access so the operating system may expose only the media the user authorizes.
+- Android 13+ tracks image and video grants independently.
+- Android 14+ also tracks `READ_MEDIA_VISUAL_USER_SELECTED`; selected-media-only authority is presented as **Selected media only**, not as full image/video access.
+- When only images or only videos are fully authorized, the UI reports that narrower media type rather than claiming the entire library is readable.
 - Android 12L and earlier use the platform read-storage permission within the supported API range.
+- Permission authority is re-evaluated when the Activity resumes so a change made through Android permission UI or Settings is not assumed to remain static.
+- Selected-media access keeps an explicit **Change selected media** action that returns authority expansion/reselection to Android's permission surface.
 - A denied or unavailable provider read is presented as unavailable; the application does not replace provider failure with a false empty-library result.
 
-The current shell reads at most 100 recent authorized rows per refresh through `AndroidMediaStoreReader`. It renders local metadata only and introduces no network permission, cloud dependency, account requirement, analytics, remote font, remote icon, or remote UI resource.
+The current shell reads at most 100 recent rows exposed by the authorized MediaStore view through `AndroidMediaStoreReader`. Android remains authoritative for which rows are visible for the current grant. Gallery does not expand selected-media access in application code.
+
+The shell renders local metadata only and introduces no network permission, cloud dependency, account requirement, analytics, remote font, remote icon, or remote UI resource.
 
 ## Glaze UI 2.0 source contract
 
@@ -38,8 +43,8 @@ This is source integration, not rendered acceptance. Accessibility, large-text r
 The application presents:
 
 - a local-library heading and explicit Development/Glaze source target;
-- media-permission state;
-- a native permission action or local refresh action;
+- explicit denied, selected-only, image-only, video-only, image-and-video, or legacy authorized media state as applicable;
+- a native permission/reselection action or local refresh action;
 - authoritative provider-failure messaging; and
 - a bounded newest-first list of authorized image/video metadata including display name, kind, optional album, timestamp, and size.
 
@@ -55,4 +60,4 @@ Everkeep remains authoritative for applicable recovery, preservation, portabilit
 
 ## Acceptance boundary
 
-This milestone is a Development source and APK-build target only. It does not establish runtime permission acceptance on a device, MediaStore behavior across supported OEMs/profiles, rendered Glaze UI acceptance, accessibility acceptance, thumbnail performance, media mutations, release signing, upgrade/recovery evidence, production platform-system acceptance, release, or Stable qualification.
+This milestone is Development source and build validation only. It does not establish runtime permission behavior on a representative device, MediaStore behavior across supported OEMs/profiles, full selected-media reselection acceptance, rendered Glaze UI acceptance, accessibility acceptance, thumbnail performance, media mutations, release signing, upgrade/recovery evidence, production platform-system acceptance, release, or Stable qualification.
