@@ -1,0 +1,35 @@
+name: Native Android App
+
+on:
+  pull_request:
+    paths:
+      - "native/**"
+      - ".github/workflows/native-android-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "native/**"
+      - ".github/workflows/native-android-app.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Test native core, adapter, and app contract
+        run: gradle :core:test :android-adapter:testDebugUnitTest :app:testDebugUnitTest --no-daemon
+      - name: Build native Gallery debug APK
+        run: gradle :app:assembleDebug --no-daemon

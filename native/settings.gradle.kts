@@ -5,6 +5,7 @@ pluginManagement {
         gradlePluginPortal()
     }
     plugins {
+        id("com.android.application") version "8.10.1"
         id("com.android.library") version "8.10.1"
         id("org.jetbrains.kotlin.android") version "2.1.20"
         kotlin("jvm") version "2.1.20"
@@ -20,4 +21,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "goreecloud-gallery-native"
-include(":core", ":android-adapter")
+include(":core", ":android-adapter", ":app")
