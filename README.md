@@ -1,117 +1,83 @@
 # GoreeCloud Gallery
 
-GoreeCloud Gallery is a GoreeCloud-maintained Android gallery application based on Fossify Gallery and governed by the GoreeCloud **Glaze UI** design language.
+GoreeCloud Gallery is GoreeCloud's offline-first Android gallery for device-local photos and videos.
 
 ## Status
 
-**Current packaged candidate:** `1.0.0`
+**Active Development — native replacement in progress. Not Stable.**
 
-**Current maintained reconstruction patch line:** `gc.9`
+The long-term product is an original GoreeCloud-owned Android application built natively from the ground up. The repository still preserves the earlier Fossify-based `1.0.0` acceptance-candidate reconstruction and gc patch history as **transitional provenance, continuity, regression, and migration reference**. That inherited application is not the long-term GoreeCloud Gallery architecture.
 
-The application remains an **Acceptance Candidate**, not a Stable production release. The `1.0.0` semantic version is intentionally final so the exact signed and device-tested binary can later be promoted without rebuilding merely to change a version suffix.
+New Gallery product behavior should advance the first-party native implementation unless a narrowly documented migration or compatibility need requires work on the transitional line.
+
+See [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) for the replacement boundary.
 
 ## Product boundary
 
-GoreeCloud Gallery is intended to be:
+GoreeCloud Gallery is intended to remain:
 
 - offline-first and local-media focused;
-- free of analytics, advertising, tracking, cloud accounts, and remote APIs;
-- built without `android.permission.INTERNET`;
-- independently installable as `com.goreecloud.gallery`;
-- visually and interactively governed by Glaze UI;
-- open source and maintained under the applicable upstream GNU GPL v3 license requirements.
+- independently installable as `com.goreecloud.gallery` when the native application is packaged;
+- governed by Android user/profile isolation and platform-authorized media access;
+- free of advertising and unnecessary tracking;
+- governed by the current Stable Glaze UI contract;
+- integrated substantively with Privacy Shield, Wardveil Security, and Everkeep where those platform responsibilities apply; and
+- honest about which capabilities are source foundations, packaged, device-accepted, released, or Stable.
 
-## User and privacy model
+Optional GoreeCloud Photos integration may be added behind explicit adapters and user control. Local browsing must not depend on a GoreeCloud account, network connection, or cloud service.
 
-GoreeCloud Gallery is a local Android client, not a shared GoreeCloud server application. It does not create an in-app account system merely to simulate multi-user behavior.
+## First-party native implementation
 
-Its user boundary is the Android operating-system user/profile model, application sandbox, permission framework, and platform-authorized media/storage access. The application must not intentionally bypass Android user/profile isolation or combine private media across users or managed profiles without an explicit platform-authorized user action.
+The repository now contains GoreeCloud-owned native foundations under `native/`.
 
-Stable-release acceptance includes a secondary-user or managed/work-profile check when a representative device supports it. See `docs/ARCHITECTURE.md` for the runtime and security model.
+`native/core` currently provides framework-independent domain behavior for:
 
-## Glaze UI contract
+- validated image/video media items;
+- deterministic media filtering and sorting;
+- local media mutation contracts;
+- trash/recovery behavior;
+- authoritative album metadata and deterministic album summaries; and
+- focused unit tests.
 
-Glaze UI is a release requirement for GoreeCloud-controlled Gallery surfaces, not optional polish. `docs/GLAZE-UI.md` defines Gallery-specific requirements for identity, rounded presentation, light/dark behavior, contrast, accessibility, secondary surfaces, destructive actions, upstream-brand regression, exceptions, and Stable-release review.
+The album model deliberately does not fabricate synthetic albums when the platform has not supplied authoritative grouping metadata. Conflicting display names for one authoritative album identifier fail closed rather than silently merging inconsistent state.
 
-No permanent Glaze UI exception is currently approved.
+An early Android-facing media repository boundary also exists under `native/src`. These foundations do **not** yet constitute a complete installable native Gallery application.
 
-## Exact upstream baseline
+## Transitional reconstruction line
 
-The current build is reproducible from pinned upstream revisions:
+The repository preserves deterministic Fossify Gallery/Commons reconstruction material and the accepted gc patch chain for historical continuity, provenance, migration comparison, and regression reference.
+
+The pinned historical baseline is:
 
 - Fossify Gallery 1.13.1 — `b28299dc33821eee8d108a9880ce87876cf31443`
 - Fossify Commons 6.1.5 — `acfd352df1a1852d17a5f77def8b7ad6e522a5b6`
 
-The build workflow checks out these exact commits before applying the ordered GoreeCloud patch chain.
+The prior `1.0.0` candidate and its acceptance evidence remain evidence for that transitional binary only. They are not evidence that the first-party native replacement is complete or Stable. Applicable upstream GPLv3 licensing and provenance obligations remain preserved for that inherited work.
 
-## GoreeCloud patch chain
+## Platform requirements
 
-The repository preserves deterministic gc.1 through gc.9 transformations under `patches/gc1/` through `patches/gc9/`.
+Gallery must remain current with the applicable GoreeCloud platform systems:
 
-The chain covers GoreeCloud package identity, branding, Glaze UI palette and surfaces, launcher behavior, upstream counterfeit-warning removal, rounded-thumbnail enforcement, settings/dialog refinements, popup contrast, the accepted gc.7 `MySearchMenu` toolbar overflow correction, the gc.8 behavioral-test/policy foundation, and gc.9 final `1.0.0` package identity.
+- **Glaze UI / Design Center** — interface, interaction, accessibility, responsiveness, and design-system conformance.
+- **Privacy Shield / Privacy Center** — media permissions, data minimization, privacy controls, consent, and user control.
+- **Wardveil Security / Security Center** — protection, validation, safe file/media handling boundaries, diagnostics, and evidence-backed security states.
+- **Everkeep / Continuity Center** — recovery, preservation, portability, continuity, and applicable local-media resilience workflows.
 
-Each transformation is designed to fail closed when expected upstream source shape changes. Accepted historical patches are provenance; future behavior changes should extend the ordered patch line instead of rewriting accepted history.
+These are functional requirements, not decorative labels. Missing or unvalidated required integration blocks Stable qualification.
 
-## Repository structure
+## Stable-release work
 
-```text
-.github/        GitHub Actions, Dependabot, PR template, CODEOWNERS
-docs/           architecture, Glaze UI, build/release, signing, readiness and evidence
-patches/        preserved gc.1-gc.9 source transformations
-scripts/        reconstruction, structure/security, source, APK, and evidence validation
-README.md       project entry point
-SECURITY.md     vulnerability and security boundary
-CONTRIBUTING.md contribution and review requirements
-NOTICE.md       modification, licensing, and upstream provenance notice
-```
+The native application still requires substantial work before Stable qualification, including the final Android application shell, MediaStore integration, local albums and browsing UI, media viewer behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, accessibility, Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
 
-Generated `.build/`, `upstream-gallery/`, `upstream-commons/`, `dist/`, APK/AAB files, and signing-key containers do not belong in Git.
+The old Fossify-based acceptance candidate is not a shortcut around those native acceptance gates.
 
-## Build and validation
+## Repository guidance
 
-GitHub Actions checks out the exact revision under review, validates repository structure and security guardrails, reconstructs pinned upstream source, applies the GoreeCloud patch chain, runs centralized source acceptance checks, executes required GoreeCloud JVM behavioral tests and Android lint, builds the FOSS acceptance APK, verifies packaged application identity/version/signature/debug state/offline permission boundary/GoreeCloud notice/removed-warning boundary, and publishes the APK plus SHA-256, licensing notices, test evidence, lint evidence, and machine-readable build identity.
+- [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) — native replacement and transitional-source boundary.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — existing architecture/security context; portions describing the inherited application must be read as transitional until updated by native milestones.
+- [docs/PLATFORM_CONFORMANCE.md](docs/PLATFORM_CONFORMANCE.md) — platform conformance requirements.
+- [docs/GLAZE-UI.md](docs/GLAZE-UI.md) — Gallery-specific Glaze UI acceptance history and requirements.
+- [SECURITY.md](SECURITY.md) — vulnerability and security boundary guidance.
+- [NOTICE.md](NOTICE.md) — inherited-work licensing and provenance notices.
 
-Behavioral-test validation is fail closed. CI requires JUnit XML proving `org.fossify.gallery.helpers.GoreeCloudGalleryPolicyTest` executed with at least three tests and zero failures/errors; a merely successful `NO-SOURCE` Gradle task is not accepted as behavioral coverage.
-
-The validated suite protects GoreeCloud's enforced thumbnail behavior: thumbnails remain uncropped, file thumbnails remain rounded, and folder thumbnails remain rounded. Device-sensitive permission, file-operation, profile-isolation, accessibility, lifecycle, and Glaze UI behavior remains subject to controlled real-device acceptance.
-
-Build-evidence schema v2 records both the exact validated repository checkout commit and the maintained GoreeCloud patch line separately from the packaged application version.
-
-Third-party GitHub Actions used by the build are pinned to reviewed commit SHAs, checkout credentials are not persisted, and validation workflows retain read-only repository permissions.
-
-See `docs/BUILD-AND-RELEASE.md`, `docs/REPOSITORY-READINESS.md`, `docs/GLAZE-UI.md`, `docs/STABLE-CANDIDATE-1.0.0.md`, and `docs/RELEASE-EVIDENCE-TEMPLATE.md` for the full readiness model.
-
-## Release-signing foundation
-
-A separate manual workflow, `.github/workflows/build-signed-release-candidate.yml`, provides the controlled path for creating a long-lived-key-signed release candidate. It is isolated from normal pull-request validation and expects signing material only from the protected `stable-release` GitHub environment.
-
-The workflow does **not** publish Stable automatically. It validates repository/source controls and behavioral tests before building, aligning, signing, verifying, checking the approved signer fingerprint, and uploading a signed candidate with evidence for manual Stable acceptance.
-
-The final Stable release must reuse the exact accepted signed `1.0.0` binary. Any build-input or APK-content change creates a new candidate and invalidates affected acceptance evidence.
-
-See `docs/RELEASE-SIGNING.md`, `docs/STABLE-SIGNING-RUNBOOK.md`, and `docs/STABLE-RELEASE-CHECKLIST.md`.
-
-## Stable-release work still required
-
-Source-controlled `1.0.0` acceptance is green, but Stable promotion still requires:
-
-- creation and protected recovery copies of the long-lived release key;
-- configuration and verification of the protected `stable-release` environment and signed-candidate workflow;
-- repository-level protection for `main` so routine direct pushes cannot bypass acceptance CI;
-- broader real-device permission, destructive file-operation, hidden/excluded media, editing, sharing, lifecycle, Android user/profile, accessibility, and Glaze UI acceptance;
-- in-place upgrade and documented bad-release recovery validation using the long-lived signing identity;
-- final complete release evidence and deliberate Stable approval.
-
-Until those gates are complete, `1.0.0` remains an Acceptance Candidate or Signed Release Candidate, not Stable.
-
-## Security and contribution guidance
-
-- Read `SECURITY.md` before reporting a vulnerability or changing a security-sensitive flow.
-- Read `CONTRIBUTING.md` before modifying the patch chain, build/release logic, file operations, or Glaze UI surfaces.
-- Read `NOTICE.md` for the GoreeCloud modification and upstream provenance boundary.
-
-## License and attribution
-
-GoreeCloud Gallery remains subject to upstream GNU GPL v3 licensing requirements. Upstream authorship, copyright, licensing, and source provenance must remain preserved. GoreeCloud modifications do not remove or replace upstream license obligations.
-
-Produced acceptance/release evidence includes the complete upstream GPLv3 license text. `NOTICE.md` records the modified-work and exact-source provenance boundary; it is not a replacement for the GPL license terms.
+Canonical GoreeCloud application project specifications are maintained under `GoreeCloud/Projects`, and canonical GoreeCloud changelogs are maintained under `GoreeCloud/Changelogs`.
