@@ -4,6 +4,11 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    plugins {
+        id("com.android.library") version "8.10.1"
+        id("org.jetbrains.kotlin.android") version "2.1.20"
+        kotlin("jvm") version "2.1.20"
+    }
 }
 
 dependencyResolutionManagement {
