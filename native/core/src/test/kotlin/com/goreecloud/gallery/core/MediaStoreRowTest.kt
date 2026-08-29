@@ -14,7 +14,7 @@ class MediaStoreRowTest {
                 "_id",
                 "_display_name",
                 "mime_type",
-                "date_taken",
+                "datetaken",
                 "date_modified",
                 "width",
                 "height",
