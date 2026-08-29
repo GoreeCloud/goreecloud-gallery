@@ -56,10 +56,11 @@ data class MediaStoreRow(
     val bucketDisplayName: String?,
 ) {
     init {
+        val normalizedMimeType = mimeType.lowercase()
         require(collectionUri.startsWith("content://")) { "MediaStore collection URI must use content://" }
         require(id >= 0) { "MediaStore id must be non-negative" }
         require(displayName.isNotBlank()) { "MediaStore display name is required" }
-        require(mimeType.startsWith("image/") || mimeType.startsWith("video/")) {
+        require(normalizedMimeType.startsWith("image/") || normalizedMimeType.startsWith("video/")) {
             "MediaStore row must be image or video content"
         }
         require(dateTakenEpochMillis == null || dateTakenEpochMillis >= 0) {
@@ -76,6 +77,7 @@ data class MediaStoreRow(
 
     fun toMediaItem(): MediaItem {
         val normalizedCollection = collectionUri.trimEnd('/')
+        val normalizedMimeType = mimeType.lowercase()
         val normalizedBucketId = bucketId?.trim()?.takeIf { it.isNotEmpty() }
         val normalizedBucketName = bucketDisplayName?.trim()?.takeIf { it.isNotEmpty() }
         val hasCompleteAlbum = normalizedBucketId != null && normalizedBucketName != null
@@ -84,12 +86,12 @@ data class MediaStoreRow(
             id = id.toString(),
             contentUri = "$normalizedCollection/$id",
             displayName = displayName.trim(),
-            mimeType = mimeType.lowercase(),
+            mimeType = normalizedMimeType,
             capturedAt = dateTakenEpochMillis?.let(Instant::ofEpochMilli),
             modifiedAt = Instant.ofEpochSecond(dateModifiedEpochSeconds),
             width = width,
             height = height,
-            durationMillis = if (mimeType.startsWith("video/")) durationMillis else null,
+            durationMillis = if (normalizedMimeType.startsWith("video/")) durationMillis else null,
             sizeBytes = sizeBytes,
             albumId = if (hasCompleteAlbum) normalizedBucketId else null,
             albumName = if (hasCompleteAlbum) normalizedBucketName else null,
