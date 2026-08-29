@@ -13,6 +13,8 @@ data class MediaItem(
     val height: Int?,
     val durationMillis: Long?,
     val sizeBytes: Long,
+    val albumId: String? = null,
+    val albumName: String? = null,
 ) {
     init {
         require(id.isNotBlank())
@@ -23,6 +25,9 @@ data class MediaItem(
         require(width == null || width > 0)
         require(height == null || height > 0)
         require(durationMillis == null || durationMillis >= 0)
+        require(albumId == null || albumId.isNotBlank())
+        require(albumName == null || albumName.isNotBlank())
+        require((albumId == null) == (albumName == null))
     }
 
     val kind: MediaKind
