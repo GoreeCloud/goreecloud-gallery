@@ -43,8 +43,8 @@ class GalleryActivity : Activity() {
 
     private fun buildSurface() {
         val canvas = themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt())
-        val text = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val secondary = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
+        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
+        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val gutter = dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp))
 
         window.statusBarColor = canvas
@@ -69,27 +69,27 @@ class GalleryActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            text = "Local library"
-            setTextColor(secondary)
+            setText("Local library")
+            setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             isAllCaps = false
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
         })
         content.addView(TextView(this).apply {
-            text = "Gallery"
-            setTextColor(text)
+            setText("Gallery")
+            setTextColor(primaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 34f)
             setPadding(0, dp(4), 0, 0)
         })
         content.addView(TextView(this).apply {
-            text = "First-party Android shell · Glaze UI ${GalleryGlazeContract.VERSION} source target"
-            setTextColor(secondary)
+            setText("First-party Android shell · Glaze UI ${GalleryGlazeContract.VERSION} source target")
+            setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setPadding(0, dp(8), 0, dp(18))
         })
 
         status = TextView(this).apply {
-            setTextColor(text)
+            setTextColor(primaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(dp(14), dp(12), dp(14), dp(12))
             background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 16)
@@ -108,14 +108,14 @@ class GalleryActivity : Activity() {
         })
 
         content.addView(TextView(this).apply {
-            text = "Recent media"
-            setTextColor(text)
+            setText("Recent media")
+            setTextColor(primaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            text = "Newest authorized MediaStore rows are shown without network access or cloud dependency."
-            setTextColor(secondary)
+            setText("Newest authorized MediaStore rows are shown without network access or cloud dependency.")
+            setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
         })
@@ -195,8 +195,8 @@ class GalleryActivity : Activity() {
     }
 
     private fun mediaRow(item: MediaItem): LinearLayout {
-        val text = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val secondary = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
+        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
+        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val surface = themeColor(android.R.attr.colorBackgroundFloating, themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt()))
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -204,20 +204,20 @@ class GalleryActivity : Activity() {
             background = roundedSurface(surface, 18)
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
             addView(TextView(context).apply {
-                this.text = item.displayName
-                setTextColor(text)
+                setText(item.displayName)
+                setTextColor(primaryTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             })
             addView(TextView(context).apply {
                 val timestamp = item.capturedAt ?: item.modifiedAt
                 val kind = if (item.mimeType.startsWith("video/")) "Video" else "Image"
-                this.text = listOfNotNull(
+                setText(listOfNotNull(
                     kind,
                     item.albumName?.let { "Album: $it" },
                     DATE_TIME_FORMAT.format(timestamp),
                     formatBytes(item.sizeBytes),
-                ).joinToString(" · ")
-                setTextColor(secondary)
+                ).joinToString(" · "))
+                setTextColor(secondaryTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(5), 0, 0)
             })
@@ -228,7 +228,7 @@ class GalleryActivity : Activity() {
     }
 
     private fun messageRow(message: String): TextView = TextView(this).apply {
-        text = message
+        setText(message)
         setTextColor(themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt()))
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         gravity = Gravity.START
