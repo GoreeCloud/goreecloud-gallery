@@ -3,16 +3,17 @@ package com.goreecloud.gallery.core
 import java.time.Instant
 
 /**
- * Android MediaStore projection owned by the future native Gallery adapter.
+ * Android MediaStore projection owned by the native Gallery adapter.
  *
- * This core contract intentionally has no android.* dependency so MediaStore normalization
- * remains deterministic and unit-testable before a device ContentResolver is wired in.
+ * This core contract intentionally has no android.* dependency so MediaStore normalization remains
+ * deterministic and unit-testable. Column literals mirror Android MediaStore constants used by the
+ * compiled adapter; DATE_TAKEN is the Android `datetaken` column and is measured in epoch millis.
  */
 object MediaStoreProjection {
     const val ID = "_id"
     const val DISPLAY_NAME = "_display_name"
     const val MIME_TYPE = "mime_type"
-    const val DATE_TAKEN = "date_taken"
+    const val DATE_TAKEN = "datetaken"
     const val DATE_MODIFIED = "date_modified"
     const val WIDTH = "width"
     const val HEIGHT = "height"
