@@ -5,10 +5,6 @@ plugins {
 group = "com.goreecloud.gallery"
 version = "0.1.0-dev"
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     testImplementation(kotlin("test"))
 }
