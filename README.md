@@ -30,18 +30,13 @@ Optional GoreeCloud Photos integration may be added behind explicit adapters and
 
 The repository now contains GoreeCloud-owned native foundations under `native/`.
 
-`native/core` currently provides framework-independent domain behavior for:
+`native/core` provides framework-independent domain behavior for validated image/video media items, deterministic filtering and sorting, local mutation contracts, trash/recovery behavior, authoritative album metadata, deterministic album summaries, and MediaStore row normalization.
 
-- validated image/video media items;
-- deterministic media filtering and sorting;
-- local media mutation contracts;
-- trash/recovery behavior;
-- authoritative album metadata and deterministic album summaries; and
-- focused unit tests.
+`native/android-adapter` is a compiled Android library bridge over local `ContentResolver` / `MediaStore.Files`. It reads bounded image/video provider rows, fails rather than fabricating an empty library when no cursor is returned, rejects malformed rows, and maps accepted state into the native core model.
 
-The album model deliberately does not fabricate synthetic albums when the platform has not supplied authoritative grouping metadata. Conflicting display names for one authoritative album identifier fail closed rather than silently merging inconsistent state.
+The current native application-shell development line adds `native/app`, a first-party Android application target using package ID `com.goreecloud.gallery`. It requires Android media authorization before provider reads, consumes the MediaStore adapter directly, renders a bounded recent-media metadata list, and maps the current Glaze UI 2.0.0 source contract through native platform controls, a 48dp target floor, adaptive gutters, local light/dark presentation, and no network-delivered UI resources.
 
-An early Android-facing media repository boundary also exists under `native/src`. These foundations do **not** yet constitute a complete installable native Gallery application.
+These foundations do **not** yet constitute a released or Stable Gallery application. See [docs/native-mediastore-adapter.md](docs/native-mediastore-adapter.md) and [docs/native-android-app-shell.md](docs/native-android-app-shell.md).
 
 ## Transitional reconstruction line
 
@@ -67,7 +62,7 @@ These are functional requirements, not decorative labels. Missing or unvalidated
 
 ## Stable-release work
 
-The native application still requires substantial work before Stable qualification, including the final Android application shell, MediaStore integration, local albums and browsing UI, media viewer behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, accessibility, Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
+The native application still requires substantial work before Stable qualification, including mature local albums and thumbnail browsing, viewer behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, rendered accessibility and Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
 
 The old Fossify-based acceptance candidate is not a shortcut around those native acceptance gates.
 
