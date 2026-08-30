@@ -5,12 +5,15 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Size
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -18,12 +21,14 @@ import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.core.MediaItem
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class GalleryActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var action: Button
     private lateinit var library: LinearLayout
+    private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private var loadGeneration = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +39,11 @@ class GalleryActivity : Activity() {
     override fun onResume() {
         super.onResume()
         renderPermissionState()
+    }
+
+    override fun onDestroy() {
+        thumbnailExecutor.shutdownNow()
+        super.onDestroy()
     }
 
     private fun buildSurface() {
@@ -109,7 +119,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            setText("Newest authorized MediaStore rows are shown without network access or cloud dependency.")
+            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency.")
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -167,7 +177,7 @@ class GalleryActivity : Activity() {
                         if (result.items.size != 1) append('s')
                         if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} malformed row(s) skipped")
                     }
-                    renderItems(result.items)
+                    renderItems(result.items, generation)
                 }
             } catch (_: SecurityException) {
                 renderLoadFailure(generation, "Android denied the current MediaStore read. Review media access and try again.")
@@ -187,24 +197,30 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun renderItems(items: List<MediaItem>) {
+    private fun renderItems(items: List<MediaItem>, generation: Int) {
         library.removeAllViews()
         if (items.isEmpty()) {
             library.addView(messageRow("No authorized image or video rows were returned."))
             return
         }
-        items.forEach { library.addView(mediaRow(it)) }
+        items.forEach { library.addView(mediaRow(it, generation)) }
     }
 
-    private fun mediaRow(item: MediaItem): LinearLayout {
+    private fun mediaRow(item: MediaItem, generation: Int): LinearLayout {
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val surface = themeColor(android.R.attr.colorBackgroundFloating, themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt()))
-        return LinearLayout(this).apply {
+        val thumbnail = ImageView(this).apply {
+            tag = item.contentUri
+            contentDescription = "Thumbnail for ${item.displayName}"
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 14)
+        }
+        loadLocalThumbnail(item, thumbnail, generation)
+
+        val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(12), dp(14), dp(12))
-            background = roundedSurface(surface, 18)
-            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            gravity = Gravity.CENTER_VERTICAL
             addView(TextView(context).apply {
                 setText(item.displayName)
                 setTextColor(primaryTextColor)
@@ -223,8 +239,42 @@ class GalleryActivity : Activity() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(5), 0, 0)
             })
+        }
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(10), dp(14), dp(10))
+            background = roundedSurface(surface, 18)
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply {
+                marginEnd = dp(12)
+            })
+            addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 topMargin = dp(8)
+            }
+        }
+    }
+
+    private fun loadLocalThumbnail(item: MediaItem, target: ImageView, generation: Int) {
+        thumbnailExecutor.execute {
+            val bitmap = try {
+                contentResolver.loadThumbnail(
+                    Uri.parse(item.contentUri),
+                    Size(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)),
+                    null,
+                )
+            } catch (_: SecurityException) {
+                null
+            } catch (_: RuntimeException) {
+                null
+            }
+            if (bitmap == null) return@execute
+            runOnUiThread {
+                if (generation == loadGeneration && target.tag == item.contentUri) {
+                    target.setImageBitmap(bitmap)
+                }
             }
         }
     }
@@ -291,6 +341,8 @@ class GalleryActivity : Activity() {
 
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
+        const val THUMBNAIL_DP = 76
+        const val THUMBNAIL_WORKERS = 2
         val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter
             .ofPattern("MMM d, yyyy · h:mm a")
             .withZone(ZoneId.systemDefault())
