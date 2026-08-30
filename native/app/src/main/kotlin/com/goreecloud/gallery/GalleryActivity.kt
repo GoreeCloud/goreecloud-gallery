@@ -29,16 +29,11 @@ class GalleryActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildSurface()
-        renderPermissionState()
     }
 
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == MEDIA_PERMISSION_REQUEST) renderPermissionState()
+    override fun onResume() {
+        super.onResume()
+        renderPermissionState()
     }
 
     private fun buildSurface() {
@@ -130,7 +125,8 @@ class GalleryActivity : Activity() {
     }
 
     private fun renderPermissionState() {
-        if (!hasReadableMediaAccess()) {
+        val accessScope = currentMediaAccessScope()
+        if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
             loadGeneration += 1
             status.text = "Media permission is required before Gallery can read the local library."
             action.isEnabled = true
@@ -141,15 +137,20 @@ class GalleryActivity : Activity() {
             return
         }
 
-        action.text = "Refresh local library"
-        action.setOnClickListener { loadLocalLibrary() }
-        loadLocalLibrary()
+        if (GalleryMediaAccessPolicy.isPartial(accessScope)) {
+            action.text = "Change selected media"
+            action.setOnClickListener { requestReadableMediaAccess() }
+        } else {
+            action.text = "Refresh local library"
+            action.setOnClickListener { loadLocalLibrary(accessScope) }
+        }
+        loadLocalLibrary(accessScope)
     }
 
-    private fun loadLocalLibrary() {
+    private fun loadLocalLibrary(accessScope: GalleryMediaAccessScope) {
         val generation = ++loadGeneration
         action.isEnabled = false
-        status.text = "Reading the authorized local MediaStore view…"
+        status.text = "${accessScopeLabel(accessScope)} · Reading the authorized local MediaStore view…"
         library.removeAllViews()
         library.addView(messageRow("Loading local media…"))
 
@@ -161,7 +162,8 @@ class GalleryActivity : Activity() {
                     if (generation != loadGeneration) return@runOnUiThread
                     action.isEnabled = true
                     status.text = buildString {
-                        append("Authorized local library: ${result.items.size} item")
+                        append(accessScopeLabel(accessScope))
+                        append(" · Authorized local library: ${result.items.size} item")
                         if (result.items.size != 1) append('s')
                         if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} malformed row(s) skipped")
                     }
@@ -235,17 +237,27 @@ class GalleryActivity : Activity() {
         setPadding(0, dp(10), 0, dp(10))
     }
 
-    private fun hasReadableMediaAccess(): Boolean {
+    private fun currentMediaAccessScope(): GalleryMediaAccessScope {
         fun granted(permission: String) = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-        return when {
-            Build.VERSION.SDK_INT >= 34 ->
-                granted(Manifest.permission.READ_MEDIA_IMAGES) ||
-                    granted(Manifest.permission.READ_MEDIA_VIDEO) ||
-                    granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            Build.VERSION.SDK_INT >= 33 ->
-                granted(Manifest.permission.READ_MEDIA_IMAGES) || granted(Manifest.permission.READ_MEDIA_VIDEO)
-            else -> granted(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+        return GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(
+                apiLevel = Build.VERSION.SDK_INT,
+                readExternalStorage = Build.VERSION.SDK_INT <= 32 && granted(Manifest.permission.READ_EXTERNAL_STORAGE),
+                readMediaImages = Build.VERSION.SDK_INT >= 33 && granted(Manifest.permission.READ_MEDIA_IMAGES),
+                readMediaVideo = Build.VERSION.SDK_INT >= 33 && granted(Manifest.permission.READ_MEDIA_VIDEO),
+                readMediaVisualUserSelected = Build.VERSION.SDK_INT >= 34 &&
+                    granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED),
+            ),
+        )
+    }
+
+    private fun accessScopeLabel(scope: GalleryMediaAccessScope): String = when (scope) {
+        GalleryMediaAccessScope.DENIED -> "Media access denied"
+        GalleryMediaAccessScope.LEGACY_FULL -> "Authorized local media access"
+        GalleryMediaAccessScope.SELECTED -> "Selected media only"
+        GalleryMediaAccessScope.IMAGES -> "Images authorized"
+        GalleryMediaAccessScope.VIDEOS -> "Videos authorized"
+        GalleryMediaAccessScope.IMAGES_AND_VIDEOS -> "Images and videos authorized"
     }
 
     private fun requestReadableMediaAccess() {
