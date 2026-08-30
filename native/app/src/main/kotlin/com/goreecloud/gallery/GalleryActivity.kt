@@ -4,10 +4,12 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.LruCache
 import android.util.Size
 import android.util.TypedValue
 import android.view.Gravity
@@ -29,6 +31,10 @@ class GalleryActivity : Activity() {
     private lateinit var action: Button
     private lateinit var library: LinearLayout
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
+    private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
+        override fun sizeOf(key: String, value: Bitmap): Int =
+            maxOf(1, value.allocationByteCount / 1024)
+    }
     private var loadGeneration = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +49,7 @@ class GalleryActivity : Activity() {
 
     override fun onDestroy() {
         thumbnailExecutor.shutdownNow()
+        thumbnailCache.evictAll()
         super.onDestroy()
     }
 
@@ -258,6 +265,14 @@ class GalleryActivity : Activity() {
     }
 
     private fun loadLocalThumbnail(item: MediaItem, target: ImageView, generation: Int) {
+        val cacheKey = item.contentUri
+        thumbnailCache.get(cacheKey)?.let { cached ->
+            if (generation == loadGeneration && target.tag == item.contentUri) {
+                target.setImageBitmap(cached)
+            }
+            return
+        }
+
         thumbnailExecutor.execute {
             val bitmap = try {
                 contentResolver.loadThumbnail(
@@ -271,6 +286,7 @@ class GalleryActivity : Activity() {
                 null
             }
             if (bitmap == null) return@execute
+            thumbnailCache.put(cacheKey, bitmap)
             runOnUiThread {
                 if (generation == loadGeneration && target.tag == item.contentUri) {
                     target.setImageBitmap(bitmap)
@@ -343,6 +359,7 @@ class GalleryActivity : Activity() {
         const val MEDIA_PERMISSION_REQUEST = 4101
         const val THUMBNAIL_DP = 76
         const val THUMBNAIL_WORKERS = 2
+        const val THUMBNAIL_CACHE_KIB = 8 * 1024
         val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter
             .ofPattern("MMM d, yyyy · h:mm a")
             .withZone(ZoneId.systemDefault())
