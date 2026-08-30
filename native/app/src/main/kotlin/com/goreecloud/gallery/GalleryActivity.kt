@@ -2,6 +2,7 @@ package com.goreecloud.gallery
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -126,7 +127,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency.")
+            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Tap an item for a bounded local preview.")
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -217,13 +218,14 @@ class GalleryActivity : Activity() {
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val surface = themeColor(android.R.attr.colorBackgroundFloating, themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt()))
+        val rowCacheKey = thumbnailCacheKey(ROW_THUMBNAIL_NAMESPACE, item.contentUri)
         val thumbnail = ImageView(this).apply {
-            tag = item.contentUri
+            tag = rowCacheKey
             contentDescription = "Thumbnail for ${item.displayName}"
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 14)
         }
-        loadLocalThumbnail(item, thumbnail, generation)
+        loadLocalThumbnail(item, thumbnail, generation, THUMBNAIL_DP, ROW_THUMBNAIL_NAMESPACE)
 
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -234,14 +236,7 @@ class GalleryActivity : Activity() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             })
             addView(TextView(context).apply {
-                val timestamp = item.capturedAt ?: item.modifiedAt
-                val kind = if (item.mimeType.startsWith("video/")) "Video" else "Image"
-                setText(listOfNotNull(
-                    kind,
-                    item.albumName?.let { "Album: $it" },
-                    DATE_TIME_FORMAT.format(timestamp),
-                    formatBytes(item.sizeBytes),
-                ).joinToString(" · "))
+                setText(mediaMetadata(item))
                 setTextColor(secondaryTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(5), 0, 0)
@@ -254,6 +249,10 @@ class GalleryActivity : Activity() {
             setPadding(dp(12), dp(10), dp(14), dp(10))
             background = roundedSurface(surface, 18)
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Open local preview for ${item.displayName}"
+            setOnClickListener { showAuthorizedPreview(item, generation) }
             addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply {
                 marginEnd = dp(12)
             })
@@ -264,10 +263,80 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun loadLocalThumbnail(item: MediaItem, target: ImageView, generation: Int) {
-        val cacheKey = item.contentUri
+    private fun showAuthorizedPreview(item: MediaItem, generation: Int) {
+        if (generation != loadGeneration || !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
+
+        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
+        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
+        val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
+        val preview = ImageView(this).apply {
+            tag = viewerCacheKey
+            contentDescription = "Local preview for ${item.displayName}"
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            adjustViewBounds = true
+            minimumHeight = dp(VIEWER_PREVIEW_DP)
+            background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 18)
+        }
+        val metadata = TextView(this).apply {
+            setText(mediaMetadata(item))
+            setTextColor(secondaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(0, dp(12), 0, 0)
+        }
+        val note = TextView(this).apply {
+            setText(if (item.mimeType.startsWith("video/")) {
+                "Local video poster preview only. Playback is a separate milestone."
+            } else {
+                "Bounded local preview only. Full-resolution viewing and editing are separate milestones."
+            })
+            setTextColor(secondaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(0, dp(8), 0, 0)
+        }
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(preview, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(VIEWER_PREVIEW_DP)))
+            addView(metadata)
+            addView(note)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(item.displayName)
+            .setView(body)
+            .setNegativeButton("Close", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
+                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                setTextColor(primaryTextColor)
+            }
+        }
+        dialog.show()
+        loadLocalThumbnail(item, preview, generation, VIEWER_PREVIEW_DP, VIEWER_THUMBNAIL_NAMESPACE)
+    }
+
+    private fun mediaMetadata(item: MediaItem): String {
+        val timestamp = item.capturedAt ?: item.modifiedAt
+        val kind = if (item.mimeType.startsWith("video/")) "Video" else "Image"
+        return listOfNotNull(
+            kind,
+            item.albumName?.let { "Album: $it" },
+            DATE_TIME_FORMAT.format(timestamp),
+            formatBytes(item.sizeBytes),
+        ).joinToString(" · ")
+    }
+
+    private fun loadLocalThumbnail(
+        item: MediaItem,
+        target: ImageView,
+        generation: Int,
+        sizeDp: Int,
+        namespace: String,
+    ) {
+        val cacheKey = thumbnailCacheKey(namespace, item.contentUri)
         thumbnailCache.get(cacheKey)?.let { cached ->
-            if (generation == loadGeneration && target.tag == item.contentUri) {
+            if (generation == loadGeneration && target.tag == cacheKey) {
                 target.setImageBitmap(cached)
             }
             return
@@ -277,7 +346,7 @@ class GalleryActivity : Activity() {
             val bitmap = try {
                 contentResolver.loadThumbnail(
                     Uri.parse(item.contentUri),
-                    Size(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)),
+                    Size(dp(sizeDp), dp(sizeDp)),
                     null,
                 )
             } catch (_: SecurityException) {
@@ -288,12 +357,14 @@ class GalleryActivity : Activity() {
             if (bitmap == null) return@execute
             thumbnailCache.put(cacheKey, bitmap)
             runOnUiThread {
-                if (generation == loadGeneration && target.tag == item.contentUri) {
+                if (generation == loadGeneration && target.tag == cacheKey) {
                     target.setImageBitmap(bitmap)
                 }
             }
         }
     }
+
+    private fun thumbnailCacheKey(namespace: String, contentUri: String): String = "$namespace:$contentUri"
 
     private fun messageRow(message: String): TextView = TextView(this).apply {
         setText(message)
@@ -358,8 +429,11 @@ class GalleryActivity : Activity() {
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
         const val THUMBNAIL_DP = 76
+        const val VIEWER_PREVIEW_DP = 320
         const val THUMBNAIL_WORKERS = 2
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
+        const val ROW_THUMBNAIL_NAMESPACE = "row"
+        const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
         val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter
             .ofPattern("MMM d, yyyy · h:mm a")
             .withZone(ZoneId.systemDefault())
