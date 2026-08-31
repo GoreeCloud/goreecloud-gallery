@@ -19,6 +19,7 @@ import android.util.LruCache
 import android.util.Size
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -31,6 +32,9 @@ import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
+import com.goreecloud.gallery.core.GalleryBulkActionPolicy
+import com.goreecloud.gallery.core.GalleryFavoriteBulkAction
+import com.goreecloud.gallery.core.GallerySelectionPolicy
 import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaSortOrder
 import com.goreecloud.gallery.core.buildAlbumCatalog
@@ -60,6 +64,7 @@ class GalleryActivity : Activity() {
     private lateinit var action: TextView
     private lateinit var library: LinearLayout
     private lateinit var navigationCapsule: LinearLayout
+    private lateinit var selectionActionCapsule: LinearLayout
 
     private var thumbnailWorkerCount = GalleryFileLoadingPriority.FAST.thumbnailWorkerCount
     private var thumbnailExecutor: ExecutorService = Executors.newFixedThreadPool(thumbnailWorkerCount)
@@ -68,6 +73,8 @@ class GalleryActivity : Activity() {
     }
 
     private val favoriteUris = linkedSetOf<String>()
+    private val selectedUris = linkedSetOf<String>()
+    private var selectionScopeItems: List<MediaItem> = emptyList()
     private var loadGeneration = 0
     private var authorizedItems: List<MediaItem> = emptyList()
     private var selectedSort = MediaSortOrder.NEWEST
@@ -76,6 +83,9 @@ class GalleryActivity : Activity() {
     private var showingFavorites = false
     private var searchQuery = ""
     private var viewerOverlay: View? = null
+
+    private val inSelectionMode: Boolean
+        get() = selectedUris.isNotEmpty()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,6 +137,10 @@ class GalleryActivity : Activity() {
     override fun onBackPressed() {
         if (viewerOverlay != null) {
             closeAuthorizedViewer()
+            return
+        }
+        if (inSelectionMode) {
+            clearSelection()
             return
         }
         if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) {
@@ -185,12 +199,15 @@ class GalleryActivity : Activity() {
         navigationCapsule = buildNavigationCapsule()
         rootFrame.addView(
             navigationCapsule,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(GalleryGlazeContract.NAVIGATION_HEIGHT_DP)).apply {
-                gravity = Gravity.BOTTOM
-                marginStart = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
-                marginEnd = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
-                bottomMargin = dp(GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
-            },
+            bottomCapsuleLayoutParams(),
+        )
+
+        selectionActionCapsule = buildSelectionActionCapsule().apply {
+            visibility = View.GONE
+        }
+        rootFrame.addView(
+            selectionActionCapsule,
+            bottomCapsuleLayoutParams(),
         )
 
         setContentView(rootFrame)
@@ -198,6 +215,17 @@ class GalleryActivity : Activity() {
         renderNavigation()
         updateHeader()
     }
+
+    private fun bottomCapsuleLayoutParams(): FrameLayout.LayoutParams =
+        FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            dp(GalleryGlazeContract.NAVIGATION_HEIGHT_DP),
+        ).apply {
+            gravity = Gravity.BOTTOM
+            marginStart = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
+            marginEnd = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
+            bottomMargin = dp(GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
+        }
 
     private fun buildHeader(): View {
         val primaryTextColor = primaryTextColor()
@@ -210,9 +238,13 @@ class GalleryActivity : Activity() {
         }
 
         backControl = iconHeaderAction(R.drawable.ic_gallery_back, "Back to Albums") {
-            openAlbumId = null
-            showingFavorites = false
-            renderCurrentDestination()
+            if (inSelectionMode) {
+                clearSelection()
+            } else {
+                openAlbumId = null
+                showingFavorites = false
+                renderCurrentDestination()
+            }
         }.apply {
             visibility = View.GONE
         }
@@ -396,21 +428,32 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun buildNavigationCapsule(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(3), dp(3), dp(3), dp(3))
-            background = roundedSurface(
-                if (isNightMode()) 0xf21d1d1f.toInt() else 0xf2ffffff.toInt(),
-                GalleryGlazeContract.NAVIGATION_RADIUS_DP,
-            )
-            elevation = dp(GalleryGlazeContract.NAVIGATION_ELEVATION_DP).toFloat()
-        }
+    private fun buildNavigationCapsule(): LinearLayout = bottomCapsuleSurface()
+
+    private fun buildSelectionActionCapsule(): LinearLayout = bottomCapsuleSurface()
+
+    private fun bottomCapsuleSurface(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+        setPadding(dp(3), dp(3), dp(3), dp(3))
+        background = roundedSurface(
+            if (isNightMode()) 0xf21d1d1f.toInt() else 0xf2ffffff.toInt(),
+            GalleryGlazeContract.NAVIGATION_RADIUS_DP,
+        )
+        elevation = dp(GalleryGlazeContract.NAVIGATION_ELEVATION_DP).toFloat()
     }
 
     private fun renderNavigation() {
-        if (!::navigationCapsule.isInitialized) return
+        if (!::navigationCapsule.isInitialized || !::selectionActionCapsule.isInitialized) return
+        if (inSelectionMode) {
+            navigationCapsule.visibility = View.GONE
+            selectionActionCapsule.visibility = View.VISIBLE
+            renderSelectionActions()
+            return
+        }
+
+        selectionActionCapsule.visibility = View.GONE
+        navigationCapsule.visibility = View.VISIBLE
         navigationCapsule.removeAllViews()
         GalleryDestination.entries.forEachIndexed { index, item ->
             val selected = destination == item
@@ -438,6 +481,7 @@ class GalleryActivity : Activity() {
                     contentDescription = "$label${if (selected) ", selected" else ""}"
                     setOnClickListener {
                         if (destination == item && openAlbumId == null && !showingFavorites) return@setOnClickListener
+                        clearSelection(render = false)
                         destination = item
                         openAlbumId = null
                         showingFavorites = false
@@ -455,8 +499,76 @@ class GalleryActivity : Activity() {
         }
     }
 
+    private fun renderSelectionActions() {
+        selectionActionCapsule.removeAllViews()
+        val selectedItems = currentSelectedItems()
+        val favoriteAction = GalleryBulkActionPolicy.favoriteAction(
+            selectionScopeItems,
+            selectedUris,
+            favoriteUris,
+        )
+        val favoriteLabel = if (favoriteAction == GalleryFavoriteBulkAction.REMOVE) "Unfavorite" else "Favorite"
+
+        val actions = listOf(
+            selectionAction("Share", selectedItems.isNotEmpty(), "Share selected media") {
+                shareSelectedItems()
+            },
+            selectionAction(favoriteLabel, selectedItems.isNotEmpty(), "$favoriteLabel selected media") {
+                applySelectedFavoriteAction()
+            },
+            selectionAction("Move", false, "Move is unavailable until media mutation is implemented") {},
+            selectionAction("Delete", false, "Delete is unavailable until Trash mutation is implemented") {},
+            selectionAction("More", selectedItems.size == 1, "Show details for the selected item") {
+                selectedItems.singleOrNull()?.let(::showItemDetails)
+            },
+        )
+        actions.forEachIndexed { index, view ->
+            selectionActionCapsule.addView(
+                view,
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (index > 0) marginStart = dp(2)
+                },
+            )
+        }
+    }
+
+    private fun selectionAction(
+        label: String,
+        enabled: Boolean,
+        description: String,
+        onClick: () -> Unit,
+    ): TextView = TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (enabled) accentColor() else secondaryTextColor())
+        background = roundedSurface(
+            if (enabled) withAlpha(accentColor(), 0.10f) else Color.TRANSPARENT,
+            18,
+        )
+        isEnabled = enabled
+        isClickable = enabled
+        isFocusable = enabled
+        alpha = if (enabled) 1f else 0.42f
+        contentDescription = description
+        if (enabled) setOnClickListener { onClick() }
+    }
+
     private fun updateHeader() {
         if (!::headerTitle.isInitialized) return
+
+        if (inSelectionMode) {
+            headerTitle.text = if (selectedUris.size == 1) "1 selected" else "${selectedUris.size} selected"
+            headerSubtitle.text = "Tap items to add or remove"
+            backControl.visibility = View.VISIBLE
+            backControl.contentDescription = "Exit selection"
+            sortControl.visibility = View.GONE
+            searchControl.visibility = View.GONE
+            return
+        }
+
         val visibleItems = visibleAuthorizedItems()
 
         val collectionItems = when {
@@ -506,6 +618,7 @@ class GalleryActivity : Activity() {
         backControl.visibility =
             if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) View.VISIBLE
             else View.GONE
+        backControl.contentDescription = "Back to Albums"
         sortControl.contentDescription = "Sort order: ${sortOrderLabel()}. Double tap to change."
         val showMediaControls = destination != GalleryDestination.SETTINGS && visibleItems.isNotEmpty()
         sortControl.visibility = if (showMediaControls) View.VISIBLE else View.GONE
@@ -514,6 +627,7 @@ class GalleryActivity : Activity() {
 
     private fun renderPermissionState() {
         if (destination == GalleryDestination.SETTINGS) {
+            clearSelection(render = false)
             accessPanel.visibility = View.GONE
             renderCurrentDestination()
             return
@@ -521,6 +635,7 @@ class GalleryActivity : Activity() {
 
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
+            clearSelection(render = false)
             loadGeneration += 1
             authorizedItems = emptyList()
             openAlbumId = null
@@ -539,6 +654,7 @@ class GalleryActivity : Activity() {
                 ),
             )
             updateHeader()
+            renderNavigation()
             return
         }
 
@@ -571,6 +687,7 @@ class GalleryActivity : Activity() {
                 val result = AndroidMediaStoreReader(contentResolver).readLatest(GalleryGlazeContract.MAX_RENDERED_MEDIA_ROWS)
                 runOnUiThread {
                     if (generation != loadGeneration) return@runOnUiThread
+                    clearSelection(render = false)
                     authorizedItems = result.items
                     action.isEnabled = true
                     action.alpha = 1f
@@ -602,6 +719,7 @@ class GalleryActivity : Activity() {
     private fun renderLoadFailure(generation: Int, message: String) {
         runOnUiThread {
             if (generation != loadGeneration) return@runOnUiThread
+            clearSelection(render = false)
             authorizedItems = emptyList()
             openAlbumId = null
             showingFavorites = false
@@ -622,6 +740,7 @@ class GalleryActivity : Activity() {
                 ),
             )
             updateHeader()
+            renderNavigation()
         }
     }
 
@@ -633,9 +752,12 @@ class GalleryActivity : Activity() {
         library.removeAllViews()
 
         if (destination == GalleryDestination.SETTINGS) {
+            clearSelection(render = false)
             accessPanel.visibility = View.GONE
             if (searchContainer.visibility == View.VISIBLE) closeSearch(clearQuery = false)
             renderSettings()
+            updateHeader()
+            renderNavigation()
             return
         }
 
@@ -700,7 +822,7 @@ class GalleryActivity : Activity() {
                         generation = generation,
                         emptyTitle = if (searchQuery.isBlank()) "No favorites yet" else "No favorite results",
                         emptyMessage = if (searchQuery.isBlank()) {
-                            "Mark a visible photo or video as a favorite from the viewer to keep it here."
+                            "Mark a visible photo or video as a favorite from the viewer or selection mode to keep it here."
                         } else {
                             "No visible authorized favorites match “$searchQuery”."
                         },
@@ -736,6 +858,10 @@ class GalleryActivity : Activity() {
         emptyTitle: String,
         emptyMessage: String,
     ) {
+        syncSelectionScope(items)
+        updateHeader()
+        renderNavigation()
+
         if (items.isEmpty()) {
             library.addView(emptyState(emptyTitle, emptyMessage))
             return
@@ -748,11 +874,13 @@ class GalleryActivity : Activity() {
 
         groups.forEach { (label, groupItems) ->
             library.addView(sectionHeader(label))
-            renderMediaGrid(groupItems, generation, library)
+            renderMediaGrid(groupItems, items, generation, library)
         }
     }
 
     private fun renderAlbums(generation: Int, sourceItems: List<MediaItem>) {
+        clearSelection(render = false)
+        selectionScopeItems = emptyList()
         val query = searchQuery.lowercase()
         val catalog = sourceItems.buildAlbumCatalog()
             .let { albums ->
@@ -778,6 +906,8 @@ class GalleryActivity : Activity() {
                     },
                 ),
             )
+            updateHeader()
+            renderNavigation()
             return
         }
 
@@ -805,6 +935,8 @@ class GalleryActivity : Activity() {
         }
 
         renderAlbumGrid(tiles, generation)
+        updateHeader()
+        renderNavigation()
     }
 
     private fun renderAlbumGrid(albums: List<AlbumPresentation>, generation: Int) {
@@ -863,6 +995,7 @@ class GalleryActivity : Activity() {
             isFocusable = true
             contentDescription = "${album.name}, ${itemCountLabel(album.count)}"
             setOnClickListener {
+                clearSelection(render = false)
                 searchQuery = ""
                 searchField.setText("")
                 closeSearch(clearQuery = false)
@@ -897,23 +1030,29 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun renderMediaGrid(items: List<MediaItem>, generation: Int, parent: LinearLayout) {
+    private fun renderMediaGrid(
+        groupItems: List<MediaItem>,
+        collectionItems: List<MediaItem>,
+        generation: Int,
+        parent: LinearLayout,
+    ) {
         val columns = GalleryGlazeContract.gridColumns(resources.configuration.screenWidthDp)
         val gutterPx = dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp))
         val gaps = dp(GRID_GAP_DP) * (columns - 1)
         val tileSize = (
             (resources.displayMetrics.widthPixels - (gutterPx * 2) - gaps) / columns
         ).coerceAtLeast(dp(GalleryGlazeContract.MIN_GRID_TILE_DP))
+        val collectionIndexes = collectionItems.withIndex().associate { it.value.contentUri to it.index }
 
-        items.chunked(columns).forEachIndexed { rowIndex, rowItems ->
+        groupItems.chunked(columns).forEachIndexed { rowIndex, rowItems ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.START
             }
             rowItems.forEachIndexed { columnIndex, item ->
-                val absoluteIndex = rowIndex * columns + columnIndex
+                val collectionIndex = collectionIndexes[item.contentUri] ?: return@forEachIndexed
                 row.addView(
-                    mediaTile(item, items, absoluteIndex, generation),
+                    mediaTile(item, collectionItems, collectionIndex, generation),
                     LinearLayout.LayoutParams(0, tileSize, 1f).apply {
                         if (columnIndex > 0) marginStart = dp(GRID_GAP_DP)
                     },
@@ -945,6 +1084,7 @@ class GalleryActivity : Activity() {
         val placeholder = withAlpha(primaryTextColor(), 0.08f)
         val cacheKey = thumbnailCacheKey(GRID_THUMBNAIL_NAMESPACE, item.contentUri)
         val cornerDp = thumbnailCornerDp(GRID_CORNER_DP)
+        val selected = item.contentUri in selectedUris
         val thumbnail = ImageView(this).apply {
             tag = cacheKey
             contentDescription = null
@@ -958,13 +1098,36 @@ class GalleryActivity : Activity() {
             clipToOutline = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             isClickable = true
+            isLongClickable = true
             isFocusable = true
-            contentDescription = "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer."
-            setOnClickListener { showAuthorizedViewer(items, index, generation) }
+            isSelected = selected
+            contentDescription = if (inSelectionMode) {
+                "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
+            } else {
+                "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer. Long press to select."
+            }
+            setOnClickListener {
+                if (inSelectionMode) toggleSelection(item, items)
+                else showAuthorizedViewer(items, index, generation)
+            }
+            setOnLongClickListener {
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                toggleSelection(item, items)
+                true
+            }
             addView(
                 thumbnail,
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
+            if (selected) {
+                addView(
+                    View(context).apply {
+                        background = roundedSurface(withAlpha(accentColor(), 0.20f), cornerDp)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    },
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                )
+            }
             if (item.mimeType.startsWith("video/")) {
                 addView(
                     TextView(context).apply {
@@ -984,7 +1147,110 @@ class GalleryActivity : Activity() {
                     },
                 )
             }
+            if (selected) {
+                addView(
+                    TextView(context).apply {
+                        text = "✓"
+                        gravity = Gravity.CENTER
+                        setTextColor(Color.WHITE)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                        setTypeface(typeface, Typeface.BOLD)
+                        background = roundedSurface(accentColor(), 14)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    },
+                    FrameLayout.LayoutParams(dp(28), dp(28)).apply {
+                        gravity = Gravity.END or Gravity.TOP
+                        marginEnd = dp(5)
+                        topMargin = dp(5)
+                    },
+                )
+            }
         }
+    }
+
+    private fun syncSelectionScope(items: List<MediaItem>) {
+        selectionScopeItems = items
+        if (!inSelectionMode) return
+        val pruned = GallerySelectionPolicy.prune(selectedUris, items)
+        selectedUris.clear()
+        selectedUris.addAll(pruned)
+        if (selectedUris.isEmpty()) selectionScopeItems = items
+    }
+
+    private fun toggleSelection(item: MediaItem, currentScope: List<MediaItem>) {
+        selectionScopeItems = currentScope
+        val updated = GallerySelectionPolicy.toggle(selectedUris, item, currentScope)
+        selectedUris.clear()
+        selectedUris.addAll(updated)
+        if (selectedUris.isEmpty()) {
+            announceForAccessibility("Selection cleared")
+        } else {
+            announceForAccessibility(
+                if (selectedUris.size == 1) "1 item selected" else "${selectedUris.size} items selected",
+            )
+        }
+        renderCurrentDestination()
+    }
+
+    private fun clearSelection(render: Boolean = true) {
+        val hadSelection = selectedUris.isNotEmpty()
+        selectedUris.clear()
+        selectionScopeItems = emptyList()
+        if (!::navigationCapsule.isInitialized) return
+        if (render) {
+            renderCurrentDestination()
+        } else if (hadSelection) {
+            updateHeader()
+            renderNavigation()
+        }
+    }
+
+    private fun currentSelectedItems(): List<MediaItem> =
+        GallerySelectionPolicy.resolve(selectionScopeItems, selectedUris)
+
+    private fun shareSelectedItems() {
+        val plan = GalleryBulkActionPolicy.sharePlan(selectionScopeItems, selectedUris) ?: return
+        val uris = ArrayList(plan.contentUris.map(Uri::parse))
+        val shareIntent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = plan.mimeType
+                putExtra(Intent.EXTRA_STREAM, uris.first())
+            }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = plan.mimeType
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            }
+        }.apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(Intent.createChooser(shareIntent, "Share selected media"))
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "No compatible share destination is available.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun applySelectedFavoriteAction() {
+        val selectedItems = currentSelectedItems()
+        val plannedAction = GalleryBulkActionPolicy.favoriteAction(
+            selectionScopeItems,
+            selectedUris,
+            favoriteUris,
+        ) ?: return
+
+        when (plannedAction) {
+            GalleryFavoriteBulkAction.ADD -> selectedItems.forEach { favoriteUris.add(it.contentUri) }
+            GalleryFavoriteBulkAction.REMOVE -> selectedItems.forEach { favoriteUris.remove(it.contentUri) }
+        }
+        persistFavorites()
+        val count = selectedItems.size
+        val message = when (plannedAction) {
+            GalleryFavoriteBulkAction.ADD -> if (count == 1) "Added to Favorites" else "Added $count items to Favorites"
+            GalleryFavoriteBulkAction.REMOVE -> if (count == 1) "Removed from Favorites" else "Removed $count items from Favorites"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        clearSelection()
     }
 
     private fun showAuthorizedViewer(items: List<MediaItem>, initialIndex: Int, generation: Int) {
@@ -994,6 +1260,7 @@ class GalleryActivity : Activity() {
             initialIndex !in items.indices
         ) return
 
+        clearSelection(render = false)
         viewerOverlay?.let { rootFrame.removeView(it) }
 
         val overlay = FrameLayout(this).apply {
@@ -1788,7 +2055,7 @@ class GalleryActivity : Activity() {
     }
 
     private fun toggleSearch() {
-        if (destination == GalleryDestination.SETTINGS) return
+        if (destination == GalleryDestination.SETTINGS || inSelectionMode) return
         if (searchContainer.visibility == View.VISIBLE) {
             closeSearch()
         } else {
