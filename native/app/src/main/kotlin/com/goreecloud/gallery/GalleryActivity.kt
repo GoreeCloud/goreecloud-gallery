@@ -21,6 +21,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -45,9 +46,9 @@ class GalleryActivity : Activity() {
     private lateinit var content: LinearLayout
     private lateinit var headerTitle: TextView
     private lateinit var headerSubtitle: TextView
-    private lateinit var backControl: TextView
-    private lateinit var searchControl: TextView
-    private lateinit var sortControl: TextView
+    private lateinit var backControl: ImageView
+    private lateinit var searchControl: ImageView
+    private lateinit var sortControl: ImageView
     private lateinit var searchContainer: LinearLayout
     private lateinit var searchField: EditText
     private lateinit var accessPanel: LinearLayout
@@ -127,7 +128,7 @@ class GalleryActivity : Activity() {
 
         library = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(16), 0, 0)
+            setPadding(0, dp(10), 0, 0)
         }
         content.addView(
             library,
@@ -144,7 +145,9 @@ class GalleryActivity : Activity() {
         }
         rootFrame.addView(
             scroll,
-            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                bottomMargin = dp(GalleryGlazeContract.NAVIGATION_RESERVED_SPACE_DP)
+            },
         )
 
         navigationCapsule = buildNavigationCapsule()
@@ -152,9 +155,9 @@ class GalleryActivity : Activity() {
             navigationCapsule,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(GalleryGlazeContract.NAVIGATION_HEIGHT_DP)).apply {
                 gravity = Gravity.BOTTOM
-                marginStart = dp(16)
-                marginEnd = dp(16)
-                bottomMargin = dp(18)
+                marginStart = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
+                marginEnd = dp(GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
+                bottomMargin = dp(GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
             },
         )
 
@@ -171,27 +174,23 @@ class GalleryActivity : Activity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(2), 0, 0)
+            setPadding(0, dp(3), 0, 0)
         }
 
-        backControl = TextView(this).apply {
-            text = "‹"
-            gravity = Gravity.CENTER
-            minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-            setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Back to Albums"
+        backControl = iconHeaderAction(R.drawable.ic_gallery_back, "Back to Albums") {
+            openAlbumId = null
+            showingFavorites = false
+            renderCurrentDestination()
+        }.apply {
             visibility = View.GONE
-            setOnClickListener {
-                openAlbumId = null
-                showingFavorites = false
-                renderCurrentDestination()
-            }
         }
-        row.addView(backControl)
+        row.addView(
+            backControl,
+            LinearLayout.LayoutParams(
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+            ),
+        )
 
         val titles = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -199,13 +198,13 @@ class GalleryActivity : Activity() {
         }
         headerTitle = TextView(this).apply {
             setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
             setTypeface(typeface, Typeface.BOLD)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
         headerSubtitle = TextView(this).apply {
             setTextColor(secondaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             setPadding(0, dp(1), 0, 0)
         }
         titles.addView(headerTitle)
@@ -217,12 +216,24 @@ class GalleryActivity : Activity() {
             },
         )
 
-        searchControl = quietHeaderAction("Search", "Search the current Gallery destination") {
+        searchControl = iconHeaderAction(
+            R.drawable.ic_gallery_search,
+            "Search the current Gallery destination",
+        ) {
             toggleSearch()
         }
-        row.addView(searchControl)
+        row.addView(
+            searchControl,
+            LinearLayout.LayoutParams(
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+            ),
+        )
 
-        sortControl = quietHeaderAction("Newest", "Change Gallery sort order") {
+        sortControl = iconHeaderAction(
+            R.drawable.ic_gallery_sort,
+            "Change Gallery sort order",
+        ) {
             selectedSort = if (selectedSort == MediaSortOrder.NEWEST) MediaSortOrder.OLDEST else MediaSortOrder.NEWEST
             renderCurrentDestination()
             announceForAccessibility(
@@ -231,8 +242,11 @@ class GalleryActivity : Activity() {
         }
         row.addView(
             sortControl,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = dp(6)
+            LinearLayout.LayoutParams(
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+            ).apply {
+                marginStart = dp(4)
             },
         )
 
@@ -244,10 +258,10 @@ class GalleryActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             visibility = View.GONE
-            setPadding(dp(14), dp(4), dp(6), dp(4))
+            setPadding(dp(14), dp(2), dp(4), dp(2))
             background = roundedSurface(
-                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.06f),
-                20,
+                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.055f),
+                18,
             )
         }
 
@@ -256,7 +270,7 @@ class GalleryActivity : Activity() {
             setSingleLine(true)
             setTextColor(primaryTextColor())
             setHintTextColor(withAlpha(secondaryTextColor(), 0.88f))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             background = null
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             addTextChangedListener(object : TextWatcher {
@@ -274,23 +288,26 @@ class GalleryActivity : Activity() {
         )
 
         searchContainer.addView(
-            TextView(this).apply {
-                text = "×"
-                gravity = Gravity.CENTER
-                minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                setTextColor(primaryTextColor())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            ImageView(this).apply {
+                setImageResource(R.drawable.ic_gallery_close)
+                setColorFilter(primaryTextColor())
+                setPadding(dp(13), dp(13), dp(13), dp(13))
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
                 isClickable = true
                 isFocusable = true
                 contentDescription = "Close search"
+                background = roundedSurface(Color.TRANSPARENT, 16)
                 setOnClickListener { closeSearch() }
             },
+            LinearLayout.LayoutParams(
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+                dp(GalleryGlazeContract.GENERAL_TARGET_DP),
+            ),
         )
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(10), 0, 0)
+            setPadding(0, dp(8), 0, 0)
             addView(
                 searchContainer,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
@@ -303,17 +320,17 @@ class GalleryActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             visibility = View.GONE
-            setPadding(dp(14), dp(10), dp(8), dp(10))
+            setPadding(dp(12), dp(8), dp(6), dp(8))
             background = roundedSurface(
-                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.055f),
-                18,
+                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.05f),
+                16,
             )
         }
 
         status = TextView(this).apply {
             setTextColor(primaryTextColor())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setLineSpacing(0f, 1.08f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+            setLineSpacing(0f, 1.06f)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
         accessPanel.addView(
@@ -326,11 +343,11 @@ class GalleryActivity : Activity() {
         action = TextView(this).apply {
             minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
             gravity = Gravity.CENTER
-            setPadding(dp(14), 0, dp(14), 0)
+            setPadding(dp(12), 0, dp(12), 0)
             setTextColor(accentColor())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
             setTypeface(typeface, Typeface.BOLD)
-            background = roundedSurface(withAlpha(accentColor(), 0.14f), 16)
+            background = roundedSurface(withAlpha(accentColor(), 0.12f), 15)
             isClickable = true
             isFocusable = true
             contentDescription = "Gallery media access action"
@@ -339,7 +356,7 @@ class GalleryActivity : Activity() {
 
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(10), 0, 0)
+            setPadding(0, dp(8), 0, 0)
             addView(
                 accessPanel,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
@@ -351,12 +368,12 @@ class GalleryActivity : Activity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(5), dp(5), dp(5), dp(5))
+            setPadding(dp(3), dp(3), dp(3), dp(3))
             background = roundedSurface(
                 if (isNightMode()) 0xf21d1d1f.toInt() else 0xf2ffffff.toInt(),
                 GalleryGlazeContract.NAVIGATION_RADIUS_DP,
             )
-            elevation = dp(8).toFloat()
+            elevation = dp(GalleryGlazeContract.NAVIGATION_ELEVATION_DP).toFloat()
         }
     }
 
@@ -375,11 +392,11 @@ class GalleryActivity : Activity() {
                     text = label
                     gravity = Gravity.CENTER
                     minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                     setTextColor(if (selected) accentColor() else primaryTextColor())
                     if (selected) setTypeface(typeface, Typeface.BOLD)
                     background = roundedSurface(
-                        if (selected) withAlpha(accentColor(), 0.16f) else Color.TRANSPARENT,
+                        if (selected) withAlpha(accentColor(), 0.13f) else Color.TRANSPARENT,
                         18,
                     )
                     isClickable = true
@@ -399,7 +416,7 @@ class GalleryActivity : Activity() {
                     }
                 },
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
-                    if (index > 0) marginStart = dp(4)
+                    if (index > 0) marginStart = dp(2)
                 },
             )
         }
@@ -426,7 +443,7 @@ class GalleryActivity : Activity() {
             else -> "Gallery"
         }
 
-        val subtitle = when {
+        val baseSubtitle = when {
             destination == GalleryDestination.ALBUMS && (showingFavorites || openAlbumId != null) ->
                 itemCountLabel(collectionItems.size)
             destination == GalleryDestination.PHOTOS ->
@@ -443,11 +460,11 @@ class GalleryActivity : Activity() {
         }
 
         headerTitle.text = title
-        headerSubtitle.text = subtitle
+        headerSubtitle.text = if (authorizedItems.isEmpty()) baseSubtitle else "$baseSubtitle · ${sortOrderLabel()}"
         backControl.visibility =
             if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) View.VISIBLE
             else View.GONE
-        sortControl.text = if (selectedSort == MediaSortOrder.NEWEST) "Newest" else "Oldest"
+        sortControl.contentDescription = "Sort order: ${sortOrderLabel()}. Double tap to change."
         sortControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
         searchControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
     }
@@ -467,8 +484,8 @@ class GalleryActivity : Activity() {
             action.setOnClickListener { requestReadableMediaAccess() }
             library.removeAllViews()
             library.addView(
-                messageRow(
-                    title = "Your library is private by default",
+                emptyState(
+                    title = "Your library stays private",
                     message = "Gallery only reads media Android authorizes. No GoreeCloud account or network connection is required.",
                 ),
             )
@@ -650,7 +667,7 @@ class GalleryActivity : Activity() {
         emptyMessage: String,
     ) {
         if (items.isEmpty()) {
-            library.addView(messageRow(emptyTitle, emptyMessage))
+            library.addView(emptyState(emptyTitle, emptyMessage))
             return
         }
 
@@ -682,7 +699,7 @@ class GalleryActivity : Activity() {
 
         if (catalog.isEmpty() && !showFavoritesTile) {
             library.addView(
-                messageRow(
+                emptyState(
                     if (searchQuery.isBlank()) "No albums yet" else "No album results",
                     if (searchQuery.isBlank()) {
                         "Gallery could not derive any authorized local albums from Android media metadata."
@@ -753,7 +770,7 @@ class GalleryActivity : Activity() {
             library.addView(
                 row,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    if (rowIndex > 0) topMargin = dp(18)
+                    if (rowIndex > 0) topMargin = dp(16)
                 },
             )
         }
@@ -794,17 +811,17 @@ class GalleryActivity : Activity() {
             addView(TextView(context).apply {
                 text = album.name
                 setTextColor(primaryTextColor())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15.5f)
                 setTypeface(typeface, Typeface.BOLD)
                 maxLines = 1
-                setPadding(dp(2), dp(8), dp(2), 0)
+                setPadding(dp(2), dp(7), dp(2), 0)
             })
             addView(TextView(context).apply {
                 text = itemCountLabel(album.count)
                 setTextColor(secondaryTextColor())
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 maxLines = 1
-                setPadding(dp(2), dp(2), dp(2), 0)
+                setPadding(dp(2), dp(1), dp(2), 0)
             })
         }
     }
@@ -890,8 +907,8 @@ class GalleryActivity : Activity() {
                     },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         gravity = Gravity.END or Gravity.BOTTOM
-                        marginEnd = dp(6)
-                        bottomMargin = dp(6)
+                        marginEnd = dp(5)
+                        bottomMargin = dp(5)
                     },
                 )
             }
@@ -1157,18 +1174,16 @@ class GalleryActivity : Activity() {
         if (enabled) setOnClickListener { onClick() }
     }
 
-    private fun quietHeaderAction(
-        label: String,
+    private fun iconHeaderAction(
+        iconResource: Int,
         description: String,
         onClick: () -> Unit,
-    ): TextView = TextView(this).apply {
-        text = label
-        gravity = Gravity.CENTER
-        minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-        setPadding(dp(10), 0, dp(10), 0)
-        setTextColor(primaryTextColor())
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-        background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.055f), 16)
+    ): ImageView = ImageView(this).apply {
+        setImageResource(iconResource)
+        setColorFilter(primaryTextColor())
+        setPadding(dp(13), dp(13), dp(13), dp(13))
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.05f), 16)
         isClickable = true
         isFocusable = true
         contentDescription = description
@@ -1181,14 +1196,24 @@ class GalleryActivity : Activity() {
         } else {
             searchContainer.visibility = View.VISIBLE
             searchField.requestFocus()
-            searchControl.text = "Close"
+            searchControl.setImageResource(R.drawable.ic_gallery_close)
+            searchControl.setColorFilter(primaryTextColor())
+            searchControl.contentDescription = "Close search"
+            searchContainer.post {
+                (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
+                    ?.showSoftInput(searchField, InputMethodManager.SHOW_IMPLICIT)
+            }
         }
     }
 
     private fun closeSearch(clearQuery: Boolean = true) {
         if (!::searchContainer.isInitialized) return
         searchContainer.visibility = View.GONE
-        searchControl.text = "Search"
+        searchControl.setImageResource(R.drawable.ic_gallery_search)
+        searchControl.setColorFilter(primaryTextColor())
+        searchControl.contentDescription = "Search the current Gallery destination"
+        (getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager)
+            ?.hideSoftInputFromWindow(searchField.windowToken, 0)
         if (clearQuery) {
             searchQuery = ""
             if (::searchField.isInitialized && searchField.text.isNotEmpty()) searchField.setText("")
@@ -1203,12 +1228,15 @@ class GalleryActivity : Activity() {
             item.albumName?.lowercase()?.contains(query) == true
     }
 
+    private fun sortOrderLabel(): String =
+        if (selectedSort == MediaSortOrder.NEWEST) "Newest first" else "Oldest first"
+
     private fun sectionHeader(label: String): TextView = TextView(this).apply {
         text = label
         setTextColor(primaryTextColor())
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         setTypeface(typeface, Typeface.BOLD)
-        setPadding(dp(2), dp(18), 0, dp(8))
+        setPadding(dp(2), dp(16), 0, dp(7))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
@@ -1276,12 +1304,11 @@ class GalleryActivity : Activity() {
 
     private fun thumbnailCacheKey(namespace: String, contentUri: String): String = "$namespace:$contentUri"
 
-    private fun messageRow(title: String, message: String): LinearLayout {
+    private fun emptyState(title: String, message: String): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(20), dp(30), dp(20), dp(30))
-            background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f), 22)
+            setPadding(dp(20), dp(28), dp(20), dp(20))
             addView(TextView(context).apply {
                 text = title
                 gravity = Gravity.CENTER
@@ -1293,15 +1320,45 @@ class GalleryActivity : Activity() {
                 text = message
                 gravity = Gravity.CENTER
                 setTextColor(secondaryTextColor())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setLineSpacing(0f, 1.10f)
-                setPadding(0, dp(8), 0, 0)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                setLineSpacing(0f, 1.08f)
+                setPadding(0, dp(7), 0, 0)
             })
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                topMargin = dp(12)
+                topMargin = dp(16)
+            }
+        }
+    }
+
+    private fun messageRow(title: String, message: String): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(24), dp(18), dp(24))
+            background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f), 20)
+            addView(TextView(context).apply {
+                text = title
+                gravity = Gravity.CENTER
+                setTextColor(primaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(TextView(context).apply {
+                text = message
+                gravity = Gravity.CENTER
+                setTextColor(secondaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+                setLineSpacing(0f, 1.08f)
+                setPadding(0, dp(7), 0, 0)
+            })
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = dp(10)
             }
         }
     }
@@ -1412,10 +1469,10 @@ class GalleryActivity : Activity() {
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
         const val GRID_GAP_DP = 3
-        const val GRID_CORNER_DP = 10
+        const val GRID_CORNER_DP = 8
         const val GRID_THUMBNAIL_DP = 192
         const val ALBUM_GAP_DP = 12
-        const val ALBUM_CORNER_DP = 18
+        const val ALBUM_CORNER_DP = 16
         const val ALBUM_THUMBNAIL_DP = 320
         const val VIEWER_THUMBNAIL_DP = 720
         const val THUMBNAIL_WORKERS = 2
