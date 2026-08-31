@@ -16,6 +16,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -25,6 +26,8 @@ import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaSortOrder
 import com.goreecloud.gallery.core.MediaTypeFilter
 import com.goreecloud.gallery.core.filter
+import com.goreecloud.gallery.core.filterAuthorizedAlbum
+import com.goreecloud.gallery.core.mediaAlbumOptions
 import com.goreecloud.gallery.core.sort
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -36,6 +39,7 @@ class GalleryActivity : Activity() {
     private lateinit var action: Button
     private lateinit var filterRow: LinearLayout
     private lateinit var sortRow: LinearLayout
+    private lateinit var albumRow: LinearLayout
     private lateinit var library: LinearLayout
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
@@ -45,6 +49,7 @@ class GalleryActivity : Activity() {
     private var authorizedItems: List<MediaItem> = emptyList()
     private var selectedFilter = MediaTypeFilter.ALL
     private var selectedSort = MediaSortOrder.NEWEST
+    private var selectedAlbumId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -131,7 +136,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Type filters and sort controls operate only on this authorized snapshot; preview navigation stays within the presented view."
+            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Type, album, and sort controls operate only on this authorized snapshot; preview navigation stays within the presented view."
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -152,6 +157,19 @@ class GalleryActivity : Activity() {
             topMargin = dp(6)
         })
         renderSortControls()
+
+        albumRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START
+        }
+        content.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            contentDescription = "Authorized album filters"
+            addView(albumRow, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(6)
+        })
+        renderAlbumControls()
 
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(library, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -219,17 +237,56 @@ class GalleryActivity : Activity() {
         }
     }
 
+    private fun renderAlbumControls() {
+        if (!::albumRow.isInitialized) return
+        val options = mediaAlbumOptions(authorizedItems)
+        if (selectedAlbumId != null && options.none { it.albumId == selectedAlbumId }) selectedAlbumId = null
+        albumRow.removeAllViews()
+
+        fun addAlbumButton(albumId: String?, label: String, index: Int) {
+            val selected = albumId == selectedAlbumId
+            val button = Button(this).apply {
+                text = label
+                isAllCaps = false
+                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                isEnabled = authorizedItems.isNotEmpty()
+                isActivated = selected
+                alpha = if (selected) 1f else 0.72f
+                contentDescription = if (albumId == null) {
+                    "Show all albums in the current authorized library"
+                } else {
+                    "Show album $label in the current authorized library"
+                }
+                setOnClickListener {
+                    selectedAlbumId = albumId
+                    renderAlbumControls()
+                    renderAuthorizedSnapshot(loadGeneration)
+                }
+            }
+            albumRow.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                if (index > 0) marginStart = dp(6)
+            })
+        }
+
+        addAlbumButton(null, "All albums", 0)
+        options.forEachIndexed { index, option ->
+            addAlbumButton(option.albumId, "${option.albumName} (${option.itemCount})", index + 1)
+        }
+    }
+
     private fun renderPermissionState() {
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
             loadGeneration += 1
             authorizedItems = emptyList()
+            selectedAlbumId = null
             status.text = "Media permission is required before Gallery can read the local library."
             action.isEnabled = true
             action.text = "Choose media access"
             action.setOnClickListener { requestReadableMediaAccess() }
             renderFilterControls()
             renderSortControls()
+            renderAlbumControls()
             library.removeAllViews()
             library.addView(messageRow("No MediaStore query has been attempted."))
             return
@@ -267,6 +324,7 @@ class GalleryActivity : Activity() {
                     }
                     renderFilterControls()
                     renderSortControls()
+                    renderAlbumControls()
                     renderAuthorizedSnapshot(generation)
                 }
             } catch (_: SecurityException) {
@@ -281,10 +339,12 @@ class GalleryActivity : Activity() {
         runOnUiThread {
             if (generation != loadGeneration) return@runOnUiThread
             authorizedItems = emptyList()
+            selectedAlbumId = null
             action.isEnabled = true
             status.text = message
             renderFilterControls()
             renderSortControls()
+            renderAlbumControls()
             library.removeAllViews()
             library.addView(messageRow("No media list is shown because the authoritative provider read did not succeed."))
         }
@@ -292,15 +352,23 @@ class GalleryActivity : Activity() {
 
     private fun renderAuthorizedSnapshot(generation: Int) {
         if (generation != loadGeneration) return
-        val presentedItems = selectedSort.sort(selectedFilter.filter(authorizedItems))
+        val albumFilteredItems = filterAuthorizedAlbum(authorizedItems, selectedAlbumId)
+        val presentedItems = selectedSort.sort(selectedFilter.filter(albumFilteredItems))
         library.removeAllViews()
         if (presentedItems.isEmpty()) {
-            val label = when (selectedFilter) {
+            val typeLabel = when (selectedFilter) {
                 MediaTypeFilter.ALL -> "image or video"
                 MediaTypeFilter.IMAGES -> "image"
                 MediaTypeFilter.VIDEOS -> "video"
             }
-            library.addView(messageRow("No authorized $label rows are present in the current snapshot."))
+            val albumLabel = mediaAlbumOptions(authorizedItems).firstOrNull { it.albumId == selectedAlbumId }?.albumName
+            library.addView(messageRow(
+                if (albumLabel == null) {
+                    "No authorized $typeLabel rows are present in the current snapshot."
+                } else {
+                    "No authorized $typeLabel rows are present in album $albumLabel within the current snapshot."
+                },
+            ))
             return
         }
         presentedItems.forEachIndexed { index, item -> library.addView(mediaRow(item, presentedItems, index, generation)) }
