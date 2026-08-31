@@ -14,26 +14,31 @@ The target is to recover the established GoreeCloud Gallery information architec
 - Bounded MediaStore image/video reads through the compiled Android adapter.
 - Validated media-item and MediaStore-row domain models.
 - Local thumbnails with bounded in-memory caching and no cloud dependency.
-- Direct Glaze UI 2.1 Photos / Albums / Videos / Settings navigation in the current `0.4.0-dev` candidate.
+- Direct Glaze UI 2.1 Photos / Albums / Videos / Settings navigation in the current `0.5.0-dev` candidate.
 - Dense adaptive Photos and Videos grids grouped into Today / Yesterday / calendar-date sections.
 - Newest / Oldest ordering over the current authorized snapshot.
 - Local search over authorized display names and album names without an additional provider query.
 - Dedicated Albums browsing with authoritative album covers, names, counts, adaptive cover layout, and bounded album-detail browsing.
 - Device-local Favorites backed only by Gallery app-local state; favorite/unfavorite is available from the viewer and authorized Favorites appear as a dedicated collection.
-- A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface.
+- A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface. Viewer navigation now uses the complete current authorized/presented collection rather than being accidentally constrained to one date group.
 - Android Share handoff for the currently authorized media content URI using read-only URI grant semantics.
 - Viewer details for type, album, date, dimensions, duration, and size when available.
-- Edit and Delete are intentionally unavailable in the `0.4.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
+- **Rendered long-press selection and multi-select:** long-pressing a visible media tile enters selection mode; subsequent taps toggle items. Selected thumbnails receive a Glaze accent wash and check marker, the header shows the selected count, Back exits selection, and ordinary bottom navigation is replaced by a contextual action capsule.
+- **Bulk Share:** selected authorized media can be shared using Android `ACTION_SEND` for one item or `ACTION_SEND_MULTIPLE` for multiple items, with read-only URI grants and MIME planning derived only from the bounded current selection.
+- **Bulk Favorite / Unfavorite:** selection mode adds all selected authorized items to Favorites unless every selected item is already a Favorite, in which case it removes them. Favorites remain Gallery app-local state.
+- **Selection Details:** the contextual More action exposes media details when exactly one item is selected.
+- **Mutation actions remain unavailable in selection:** Move and Delete are visibly disabled until their separately approved Android-authorized mutation/Trash paths exist. Selection state never creates write authority.
+- Framework-independent selection policy provides toggle, select-all, prune, and resolve only against a caller-supplied current authorized/presented media scope; stale or foreign content URIs cannot become bulk-action authority.
+- Framework-independent non-destructive bulk-action policy preserves presentation order and derives the narrowest safe Share MIME type while deterministically planning Favorites Add/Remove.
+- Edit and Delete remain intentionally unavailable in the `0.5.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
 - Video items currently use authorized poster thumbnails; native playback is not yet implemented.
 - Permission and load-generation re-checks before viewer rendering.
 - Framework-independent album/trash/recovery/mutation foundations used by later native milestones.
-- Framework-independent **selection authority foundation**: selection can be toggled, selected-all, pruned, and resolved only against a caller-supplied current authorized/presented media scope. Stale or foreign content URIs are removed instead of becoming bulk-action authority.
-- Framework-independent **non-destructive bulk-action planning** for selected media: share plans preserve current presentation order and derive the narrowest safe MIME type, while bulk Favorites deterministically chooses Add unless every selected authorized item is already a Favorite. This is underlying selection/action policy; the rendered long-press multi-select surface is still a follow-on milestone.
-- Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation, and accessible control sizing foundations.
+- Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation/contextual action surfaces, and accessible control sizing foundations.
 
-### Settings available in the `0.4.0-dev` candidate
+### Settings available in the `0.5.0-dev` candidate
 
-The new first-class Settings destination is available even before media access is granted. Settings are grouped into Performance, Library, Playback, Privacy & protection, Deletion & recovery, Appearance, Cache, Favorites, and Settings portability.
+The first-class Settings destination is available even before media access is granted. Settings are grouped into Performance, Library, Playback, Privacy & protection, Deletion & recovery, Appearance, Cache, Favorites, and Settings portability.
 
 The following controls have active behavior in the current Development candidate:
 
@@ -137,12 +142,12 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 
 ## Development work still required
 
-- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings shell and bounded viewer.
-- Connect the now-tested authorized selection/bulk-action policy to a rendered long-press multi-select experience with contextual Share/Favorite actions; destructive/move actions must remain unavailable until their mutation authorities are implemented and validated.
+- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings shell, bounded viewer, and first rendered multi-select tranche.
+- Refine multi-select from physical-device evidence and add approved contextual actions as their authorities become real; destructive/move actions must remain unavailable until their mutation paths are implemented and validated.
 - Add richer grouping modes, view-density/layout controls, album creation/rename/reorder, and approved move/copy organization.
 - Complete useful/full-resolution image viewing and native video playback, then connect the saved autoplay/loop preferences to accepted playback behavior.
 - Complete animated GIF thumbnail decoding before treating the saved GIF-animation preference as behaviorally active.
-- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer actions or deletion-related setting effects until those paths are validated.
+- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer/selection actions or deletion-related setting effects until those paths are validated.
 - Expand Share/export acceptance beyond the current Android read-only share handoff where needed.
 - Complete secure Private/Protected Photos, hidden/excluded media policy, and password/device-credential protection through supported platform mechanisms.
 - Complete the full Trash/Recycle Bin experience and connect the saved Recycle Bin/delete-empty-folder preferences only after destructive-operation acceptance.
