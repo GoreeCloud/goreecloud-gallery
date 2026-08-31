@@ -21,12 +21,14 @@ class GalleryGlazeContractTest {
     }
 
     @Test
-    fun `photo grid adapts across representative width classes`() {
-        assertEquals(3, GalleryGlazeContract.gridColumns(390))
+    fun `photo grid is media dense on phones and adapts across wider classes`() {
+        assertEquals(3, GalleryGlazeContract.gridColumns(320))
+        assertEquals(4, GalleryGlazeContract.gridColumns(360))
+        assertEquals(4, GalleryGlazeContract.gridColumns(390))
         assertEquals(5, GalleryGlazeContract.gridColumns(820))
         assertEquals(6, GalleryGlazeContract.gridColumns(900))
         assertEquals(7, GalleryGlazeContract.gridColumns(1280))
-        assertTrue(GalleryGlazeContract.MIN_GRID_TILE_DP >= 92)
+        assertTrue(GalleryGlazeContract.MIN_GRID_TILE_DP >= 78)
     }
 
     @Test
@@ -39,10 +41,17 @@ class GalleryGlazeContractTest {
     }
 
     @Test
-    fun `navigation capsule leaves protected content breathing room`() {
-        assertEquals(58, GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
-        assertEquals(28, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
-        assertTrue(GalleryGlazeContract.CONTENT_BOTTOM_INSET_DP > GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
+    fun `navigation capsule reserves a dedicated phone action zone`() {
+        assertEquals(54, GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
+        assertEquals(26, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
+        assertEquals(24, GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
+        assertEquals(10, GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
+        assertEquals(4, GalleryGlazeContract.NAVIGATION_ELEVATION_DP)
+        assertTrue(
+            GalleryGlazeContract.NAVIGATION_RESERVED_SPACE_DP >=
+                GalleryGlazeContract.NAVIGATION_HEIGHT_DP + GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP,
+        )
+        assertTrue(GalleryGlazeContract.CONTENT_BOTTOM_INSET_DP < GalleryGlazeContract.NAVIGATION_RESERVED_SPACE_DP)
     }
 
     @Test
