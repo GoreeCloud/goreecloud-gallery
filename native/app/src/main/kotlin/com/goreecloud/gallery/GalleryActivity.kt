@@ -127,7 +127,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Tap an item for a bounded local preview.")
+            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Tap an item for a bounded local preview, then move through the current authorized snapshot without a new provider query.")
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -211,10 +211,12 @@ class GalleryActivity : Activity() {
             library.addView(messageRow("No authorized image or video rows were returned."))
             return
         }
-        items.forEach { library.addView(mediaRow(it, generation)) }
+        items.forEachIndexed { index, item ->
+            library.addView(mediaRow(item, items, index, generation))
+        }
     }
 
-    private fun mediaRow(item: MediaItem, generation: Int): LinearLayout {
+    private fun mediaRow(item: MediaItem, items: List<MediaItem>, index: Int, generation: Int): LinearLayout {
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val surface = themeColor(android.R.attr.colorBackgroundFloating, themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt()))
@@ -252,7 +254,7 @@ class GalleryActivity : Activity() {
             isClickable = true
             isFocusable = true
             contentDescription = "Open local preview for ${item.displayName}"
-            setOnClickListener { showAuthorizedPreview(item, generation) }
+            setOnClickListener { showAuthorizedPreview(items, index, generation) }
             addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply {
                 marginEnd = dp(12)
             })
@@ -263,32 +265,27 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun showAuthorizedPreview(item: MediaItem, generation: Int) {
-        if (generation != loadGeneration || !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
+    private fun showAuthorizedPreview(items: List<MediaItem>, initialIndex: Int, generation: Int) {
+        if (
+            generation != loadGeneration ||
+            !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
+            initialIndex !in items.indices
+        ) return
 
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
-        val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
         val preview = ImageView(this).apply {
-            tag = viewerCacheKey
-            contentDescription = "Local preview for ${item.displayName}"
             scaleType = ImageView.ScaleType.CENTER_CROP
             adjustViewBounds = true
             minimumHeight = dp(VIEWER_PREVIEW_DP)
             background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 18)
         }
         val metadata = TextView(this).apply {
-            setText(mediaMetadata(item))
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, dp(12), 0, 0)
         }
         val note = TextView(this).apply {
-            setText(if (item.mimeType.startsWith("video/")) {
-                "Local video poster preview only. Playback is a separate milestone."
-            } else {
-                "Bounded local preview only. Full-resolution viewing and editing are separate milestones."
-            })
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setPadding(0, dp(8), 0, 0)
@@ -301,19 +298,69 @@ class GalleryActivity : Activity() {
             addView(note)
         }
 
+        var currentIndex = initialIndex
         val dialog = AlertDialog.Builder(this)
-            .setTitle(item.displayName)
+            .setTitle(items[currentIndex].displayName)
             .setView(body)
+            .setNeutralButton("Previous", null)
+            .setPositiveButton("Next", null)
             .setNegativeButton("Close", null)
             .create()
+
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
-                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                setTextColor(primaryTextColor)
+            val previousButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
+            val nextButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            val closeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+
+            listOf(previousButton, nextButton, closeButton).forEach { button ->
+                button?.apply {
+                    minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                    setTextColor(primaryTextColor)
+                }
             }
+
+            fun renderCurrentItem() {
+                if (
+                    generation != loadGeneration ||
+                    !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
+                    currentIndex !in items.indices
+                ) {
+                    dialog.dismiss()
+                    return
+                }
+
+                val item = items[currentIndex]
+                val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
+                dialog.setTitle(item.displayName)
+                preview.setImageDrawable(null)
+                preview.tag = viewerCacheKey
+                preview.contentDescription = "Local preview for ${item.displayName}"
+                metadata.text = mediaMetadata(item)
+                note.text = if (item.mimeType.startsWith("video/")) {
+                    "Local video poster preview only. Playback is a separate milestone."
+                } else {
+                    "Bounded local preview only. Full-resolution viewing and editing are separate milestones."
+                }
+                previousButton?.isEnabled = currentIndex > 0
+                nextButton?.isEnabled = currentIndex < items.lastIndex
+                loadLocalThumbnail(item, preview, generation, VIEWER_PREVIEW_DP, VIEWER_THUMBNAIL_NAMESPACE)
+            }
+
+            previousButton?.setOnClickListener {
+                if (currentIndex > 0) {
+                    currentIndex -= 1
+                    renderCurrentItem()
+                }
+            }
+            nextButton?.setOnClickListener {
+                if (currentIndex < items.lastIndex) {
+                    currentIndex += 1
+                    renderCurrentItem()
+                }
+            }
+            renderCurrentItem()
         }
         dialog.show()
-        loadLocalThumbnail(item, preview, generation, VIEWER_PREVIEW_DP, VIEWER_THUMBNAIL_NAMESPACE)
     }
 
     private fun mediaMetadata(item: MediaItem): String {
