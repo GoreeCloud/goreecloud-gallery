@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class GalleryGlazeContractTest {
     @Test
     fun `native shell targets current stable Glaze contract and accessible target floor`() {
-        assertEquals("2.0.0", GalleryGlazeContract.VERSION)
+        assertEquals("2.1.0", GalleryGlazeContract.VERSION)
         assertTrue(GalleryGlazeContract.GENERAL_TARGET_DP >= 48)
     }
 
@@ -17,6 +17,15 @@ class GalleryGlazeContractTest {
         assertEquals(24, GalleryGlazeContract.horizontalGutterDp(820))
         assertEquals(32, GalleryGlazeContract.horizontalGutterDp(900))
         assertEquals(40, GalleryGlazeContract.horizontalGutterDp(1280))
+    }
+
+    @Test
+    fun `photo grid adapts across representative width classes`() {
+        assertEquals(3, GalleryGlazeContract.gridColumns(390))
+        assertEquals(5, GalleryGlazeContract.gridColumns(820))
+        assertEquals(6, GalleryGlazeContract.gridColumns(900))
+        assertEquals(7, GalleryGlazeContract.gridColumns(1280))
+        assertTrue(GalleryGlazeContract.MIN_GRID_TILE_DP >= 92)
     }
 
     @Test
