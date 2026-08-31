@@ -28,6 +28,7 @@ import com.goreecloud.gallery.core.MediaTypeFilter
 import com.goreecloud.gallery.core.filter
 import com.goreecloud.gallery.core.filterAuthorizedAlbum
 import com.goreecloud.gallery.core.mediaAlbumOptions
+import com.goreecloud.gallery.core.mediaGridRows
 import com.goreecloud.gallery.core.sort
 import com.goreecloud.gallery.core.summarizeAuthorizedMediaView
 import java.time.ZoneId
@@ -139,7 +140,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Type, album, and sort controls operate only on this authorized snapshot; preview navigation stays within the presented view."
+            text = "Newest authorized MediaStore rows and local thumbnails are presented in a two-column local grid without network access or cloud dependency. Type, album, and sort controls operate only on this authorized snapshot; preview navigation stays within the presented view."
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -424,51 +425,67 @@ class GalleryActivity : Activity() {
             ))
             return
         }
-        presentedItems.forEachIndexed { index, item -> library.addView(mediaRow(item, presentedItems, index, generation)) }
+        mediaGridRows(presentedItems, GRID_COLUMNS).forEachIndexed { rowIndex, rowItems ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            rowItems.forEachIndexed { columnIndex, item ->
+                val index = rowIndex * GRID_COLUMNS + columnIndex
+                row.addView(
+                    mediaGridTile(item, presentedItems, index, generation),
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        if (columnIndex > 0) marginStart = dp(GRID_GAP_DP)
+                    },
+                )
+            }
+            if (rowItems.size < GRID_COLUMNS) {
+                row.addView(android.view.View(this), LinearLayout.LayoutParams(0, 1, 1f).apply { marginStart = dp(GRID_GAP_DP) })
+            }
+            library.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = dp(GRID_GAP_DP)
+            })
+        }
     }
 
-    private fun mediaRow(item: MediaItem, items: List<MediaItem>, index: Int, generation: Int): LinearLayout {
+    private fun mediaGridTile(item: MediaItem, items: List<MediaItem>, index: Int, generation: Int): LinearLayout {
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
         val surface = themeColor(android.R.attr.colorBackgroundFloating, themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt()))
-        val rowCacheKey = thumbnailCacheKey(ROW_THUMBNAIL_NAMESPACE, item.contentUri)
+        val cacheKey = thumbnailCacheKey(GRID_THUMBNAIL_NAMESPACE, item.contentUri)
         val thumbnail = ImageView(this).apply {
-            tag = rowCacheKey
+            tag = cacheKey
             contentDescription = "Thumbnail for ${item.displayName}"
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = roundedSurface(themeColor(android.R.attr.colorControlHighlight, 0x14000000), 14)
         }
-        loadLocalThumbnail(item, thumbnail, generation, THUMBNAIL_DP, ROW_THUMBNAIL_NAMESPACE)
-
-        val details = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(TextView(context).apply {
-                text = item.displayName
-                setTextColor(primaryTextColor)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            })
-            addView(TextView(context).apply {
-                text = mediaMetadata(item)
-                setTextColor(secondaryTextColor)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, dp(5), 0, 0)
-            })
-        }
+        loadLocalThumbnail(item, thumbnail, generation, GRID_THUMBNAIL_DP, GRID_THUMBNAIL_NAMESPACE)
 
         return LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(10), dp(14), dp(10))
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+            setPadding(dp(10), dp(10), dp(10), dp(12))
             background = roundedSurface(surface, 18)
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
             isClickable = true
             isFocusable = true
             contentDescription = "Open local preview for ${item.displayName}"
             setOnClickListener { showAuthorizedPreview(items, index, generation) }
-            addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply { marginEnd = dp(12) })
-            addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
+            addView(thumbnail, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(GRID_THUMBNAIL_DP)))
+            addView(TextView(context).apply {
+                text = item.displayName
+                setTextColor(primaryTextColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                maxLines = 2
+                setPadding(0, dp(8), 0, 0)
+            })
+            addView(TextView(context).apply {
+                text = mediaMetadata(item)
+                setTextColor(secondaryTextColor)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                maxLines = 3
+                setPadding(0, dp(4), 0, 0)
+            })
         }
     }
 
@@ -635,11 +652,13 @@ class GalleryActivity : Activity() {
 
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
-        const val THUMBNAIL_DP = 76
+        const val GRID_COLUMNS = 2
+        const val GRID_GAP_DP = 8
+        const val GRID_THUMBNAIL_DP = 132
         const val VIEWER_PREVIEW_DP = 320
         const val THUMBNAIL_WORKERS = 2
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
-        const val ROW_THUMBNAIL_NAMESPACE = "row"
+        const val GRID_THUMBNAIL_NAMESPACE = "grid"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
         val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a").withZone(ZoneId.systemDefault())
 
