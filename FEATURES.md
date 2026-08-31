@@ -10,18 +10,24 @@ The target is to recover the established GoreeCloud Gallery information architec
 
 ## Implemented in the first-party Development line
 
-- Android-authorized local image/video access with fail-closed permission gating.
+- Android-authorized local image/video access with fail-closed permission gating and explicit selected-media/partial-access handling.
 - Bounded MediaStore image/video reads through the compiled Android adapter.
 - Validated media-item and MediaStore-row domain models.
 - Local thumbnails with bounded in-memory caching and no cloud dependency.
-- All / Images / Videos filtering over the current authorized snapshot.
-- Newest / Oldest sorting over that same snapshot with deterministic tie order.
-- Bounded local image previews and video poster previews.
-- Previous / Next preview navigation constrained to the currently presented authorized snapshot.
-- Permission and load-generation re-checks before preview rendering.
+- Direct Glaze UI 2.1 Photos / Albums / Videos navigation in the current `0.3.0-dev` candidate.
+- Dense adaptive Photos and Videos grids grouped into Today / Yesterday / calendar-date sections.
+- Newest / Oldest ordering over the current authorized snapshot.
+- Local search over authorized display names and album names without an additional provider query.
+- Dedicated Albums browsing with authoritative album covers, names, counts, adaptive cover layout, and bounded album-detail browsing.
+- Device-local Favorites backed only by Gallery app-local state; favorite/unfavorite is available from the viewer and authorized Favorites appear as a dedicated collection.
+- A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface.
+- Android Share handoff for the currently authorized media content URI using read-only URI grant semantics.
+- Viewer details for type, album, date, dimensions, duration, and size when available.
+- Edit and Delete are intentionally unavailable in the `0.3.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
+- Video items currently use authorized poster thumbnails; native playback is not yet implemented.
+- Permission and load-generation re-checks before viewer rendering.
 - Framework-independent album/trash/recovery/mutation foundations used by later native milestones.
-- Adaptive photo-first grid presentation in the current Glaze UI 2.1 Development candidate.
-- Glaze UI source mapping, adaptive gutters, light/dark presentation, and accessible control sizing foundations.
+- Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation, and accessible control sizing foundations.
 
 ## Historical screenshot restoration requirements
 
@@ -104,11 +110,14 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 
 ## Development work still required
 
-- Restore the mature Samsung Gallery-inspired Photos/Albums information architecture instead of relying on a single simplified browse surface.
-- Restore the established feature set above in bounded, testable native milestones.
-- Complete full-resolution image viewing and native video playback.
-- Complete editing, share/export, favorites, metadata, selection/multi-select, and approved destructive workflows.
-- Complete hidden/excluded media and sensitive-media policy.
+- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos shell and bounded viewer.
+- Add selection and multi-select with contextual bulk actions.
+- Add richer grouping modes, view-density/layout controls, album creation/rename/reorder, and approved move/copy organization.
+- Complete useful/full-resolution image viewing and native video playback.
+- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer actions until those paths are validated.
+- Expand Share/export acceptance beyond the current Android read-only share handoff where needed.
+- Complete hidden/excluded media, Private Photos, and sensitive-media policy.
+- Add meaningful Gallery Settings and Trash/Recycle Bin surfaces.
 - Complete Privacy Shield, Wardveil, Everkeep, GoreeCloud Identity, and GoreeCloud Mesh integration where applicable and evidence-backed.
 - Complete TalkBack, switch access, large-text, contrast, reduced-motion/transparency, adaptive-layout, tablet/foldable, and representative-device acceptance.
 - Complete signed release packaging, upgrade/recovery acceptance, and Stable qualification.
