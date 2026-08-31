@@ -477,6 +477,7 @@ class GalleryActivity : Activity() {
             destination == GalleryDestination.ALBUMS -> "Albums"
             destination == GalleryDestination.VIDEOS -> "Videos"
             destination == GalleryDestination.SETTINGS -> "Settings"
+            else -> "Gallery"
         }
 
         val baseSubtitle = when {
@@ -493,6 +494,7 @@ class GalleryActivity : Activity() {
                 val totalCollections = albumCount + favoriteSuffix
                 if (totalCollections == 1) "1 collection" else "$totalCollections collections"
             }
+            else -> ""
         }
 
         headerTitle.text = title
@@ -637,7 +639,10 @@ class GalleryActivity : Activity() {
             return
         }
 
-        if (!GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
+        if (!GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) {
+            renderPermissionState()
+            return
+        }
         val visibleItems = visibleAuthorizedItems()
 
         when (destination) {
@@ -1422,7 +1427,7 @@ class GalleryActivity : Activity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minHeight = dp(68)
+            minimumHeight = dp(68)
             setPadding(dp(14), dp(10), dp(10), dp(10))
             background = roundedSurface(
                 withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f),
@@ -1699,7 +1704,7 @@ class GalleryActivity : Activity() {
                 EXCLUDED_ALBUM_IDS_KEY,
                 json.optJSONArray("excludedAlbumIds")?.let(::jsonStringSet) ?: current.excludedAlbumIds,
             )
-            .putBoolean("show_hidden_items", json.optBoolean("showHiddenItems", current.showHiddenItems))
+            .putBoolean(SHOW_HIDDEN_ITEMS_KEY, json.optBoolean("showHiddenItems", current.showHiddenItems))
             .putBoolean(
                 PLAY_VIDEOS_AUTOMATICALLY_KEY,
                 json.optBoolean("playVideosAutomatically", current.playVideosAutomatically),
