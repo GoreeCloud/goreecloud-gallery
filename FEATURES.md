@@ -14,7 +14,7 @@ The target is to recover the established GoreeCloud Gallery information architec
 - Bounded MediaStore image/video reads through the compiled Android adapter.
 - Validated media-item and MediaStore-row domain models.
 - Local thumbnails with bounded in-memory caching and no cloud dependency.
-- Direct Glaze UI 2.1 Photos / Albums / Videos navigation in the current `0.3.0-dev` candidate.
+- Direct Glaze UI 2.1 Photos / Albums / Videos / Settings navigation in the current `0.4.0-dev` candidate.
 - Dense adaptive Photos and Videos grids grouped into Today / Yesterday / calendar-date sections.
 - Newest / Oldest ordering over the current authorized snapshot.
 - Local search over authorized display names and album names without an additional provider query.
@@ -23,11 +23,36 @@ The target is to recover the established GoreeCloud Gallery information architec
 - A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface.
 - Android Share handoff for the currently authorized media content URI using read-only URI grant semantics.
 - Viewer details for type, album, date, dimensions, duration, and size when available.
-- Edit and Delete are intentionally unavailable in the `0.3.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
+- Edit and Delete are intentionally unavailable in the `0.4.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
 - Video items currently use authorized poster thumbnails; native playback is not yet implemented.
 - Permission and load-generation re-checks before viewer rendering.
 - Framework-independent album/trash/recovery/mutation foundations used by later native milestones.
 - Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation, and accessible control sizing foundations.
+
+### Settings available in the `0.4.0-dev` candidate
+
+The new first-class Settings destination is available even before media access is granted. Settings are grouped into Performance, Library, Playback, Privacy & protection, Deletion & recovery, Appearance, Cache, Favorites, and Settings portability.
+
+The following controls have active behavior in the current Development candidate:
+
+- **File loading priority — Slow / Fast:** Slow uses one local thumbnail worker; Fast uses four. The selection is persisted and changes the in-process thumbnail executor without broadening MediaStore authority.
+- **Manage included folders:** optionally restricts presentation to selected album/folder identities already present in the current Android-authorized MediaStore snapshot. An empty include set means All.
+- **Manage excluded folders:** suppresses selected authorized album/folder identities from Gallery presentation. Exclusion takes precedence over inclusion.
+- **Show hidden items:** allows Gallery to show hidden-looking names only when Android already exposes those items in the authorized MediaStore snapshot. It does not bypass Android MediaStore, `.nomedia`, profile isolation, or permission controls.
+- **Clear cache:** evicts the bounded in-memory thumbnail cache only; it never deletes media files.
+- **Export Favorites / Import Favorites:** writes or reads a versioned local JSON representation of Gallery's app-local favorite content-URI set through Android's document provider. Import merges favorite state and does not grant access to media Android has not authorized.
+- **Export settings / Import settings:** writes or reads a versioned JSON document containing non-secret Gallery preferences, including folder visibility selections. Unknown fields are ignored and imports do not carry passwords, credentials, signing material, or media bytes.
+- **Rounded-square thumbnails:** toggles GoreeCloud rounded-square clipping for current media and album thumbnails.
+
+The following requested settings are present and persisted now, but their behavioral effect remains gated by unfinished capability work and must not be represented as implemented playback or destructive-media behavior:
+
+- **Play videos automatically** — stored preference; applies when validated native video playback exists.
+- **Loop videos** — stored preference; applies when validated native video playback exists.
+- **Animate GIFs in thumbnails** — stored preference; animated thumbnail decoding is not yet enabled.
+- **Delete empty folders after deleting their content** — stored preference; destructive media workflows are not yet enabled.
+- **Move deleted items to Recycle Bin** — stored preference, enabled by default; applies when the validated Delete/Trash workflow is enabled.
+
+**Password protect photos** is deliberately not implemented as a fake app-local password switch. The Settings row explains that Protected Photos requires a real secure-media implementation using supported Android/GoreeCloud authentication and protected storage, Privacy Shield consent/visibility policy, GoreeCloud Identity where applicable, and Wardveil trust/security boundaries. Until that work is implemented and accepted, the setting is shown as not yet available.
 
 ## Historical screenshot restoration requirements
 
@@ -110,14 +135,15 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 
 ## Development work still required
 
-- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos shell and bounded viewer.
+- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings shell and bounded viewer.
 - Add selection and multi-select with contextual bulk actions.
 - Add richer grouping modes, view-density/layout controls, album creation/rename/reorder, and approved move/copy organization.
-- Complete useful/full-resolution image viewing and native video playback.
-- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer actions until those paths are validated.
+- Complete useful/full-resolution image viewing and native video playback, then connect the saved autoplay/loop preferences to accepted playback behavior.
+- Complete animated GIF thumbnail decoding before treating the saved GIF-animation preference as behaviorally active.
+- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer actions or deletion-related setting effects until those paths are validated.
 - Expand Share/export acceptance beyond the current Android read-only share handoff where needed.
-- Complete hidden/excluded media, Private Photos, and sensitive-media policy.
-- Add meaningful Gallery Settings and Trash/Recycle Bin surfaces.
+- Complete secure Private/Protected Photos, hidden/excluded media policy, and password/device-credential protection through supported platform mechanisms.
+- Complete the full Trash/Recycle Bin experience and connect the saved Recycle Bin/delete-empty-folder preferences only after destructive-operation acceptance.
 - Complete Privacy Shield, Wardveil, Everkeep, GoreeCloud Identity, and GoreeCloud Mesh integration where applicable and evidence-backed.
 - Complete TalkBack, switch access, large-text, contrast, reduced-motion/transparency, adaptive-layout, tablet/foldable, and representative-device acceptance.
 - Complete signed release packaging, upgrade/recovery acceptance, and Stable qualification.
