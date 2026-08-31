@@ -22,6 +22,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.core.MediaItem
+import com.goreecloud.gallery.core.MediaTypeFilter
+import com.goreecloud.gallery.core.filter
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
@@ -30,13 +32,15 @@ import kotlin.concurrent.thread
 class GalleryActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var action: Button
+    private lateinit var filterRow: LinearLayout
     private lateinit var library: LinearLayout
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
-        override fun sizeOf(key: String, value: Bitmap): Int =
-            maxOf(1, value.allocationByteCount / 1024)
+        override fun sizeOf(key: String, value: Bitmap): Int = maxOf(1, value.allocationByteCount / 1024)
     }
     private var loadGeneration = 0
+    private var authorizedItems: List<MediaItem> = emptyList()
+    private var selectedFilter = MediaTypeFilter.ALL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,9 +72,7 @@ class GalleryActivity : Activity() {
             var flags = 0
             if (!night) {
                 flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
             }
             window.decorView.systemUiVisibility = flags
         }
@@ -82,20 +84,20 @@ class GalleryActivity : Activity() {
         }
 
         content.addView(TextView(this).apply {
-            setText("Local library")
+            text = "Local library"
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             isAllCaps = false
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
         })
         content.addView(TextView(this).apply {
-            setText("Gallery")
+            text = "Gallery"
             setTextColor(primaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 34f)
             setPadding(0, dp(4), 0, 0)
         })
         content.addView(TextView(this).apply {
-            setText("First-party Android shell · Glaze UI ${GalleryGlazeContract.VERSION} source target")
+            text = "First-party Android shell · Glaze UI ${GalleryGlazeContract.VERSION} source target"
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setPadding(0, dp(8), 0, dp(18))
@@ -116,22 +118,27 @@ class GalleryActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             contentDescription = "Gallery media access action"
         }
-        content.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(12)
-        })
+        content.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
 
         content.addView(TextView(this).apply {
-            setText("Recent media")
+            text = "Recent media"
             setTextColor(primaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            setText("Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Tap an item for a bounded local preview, then move through the current authorized snapshot without a new provider query.")
+            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Filters operate only on this authorized snapshot; preview navigation stays within the filtered view."
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
         })
+
+        filterRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START
+        }
+        content.addView(filterRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        renderFilterControls()
 
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(library, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -142,14 +149,45 @@ class GalleryActivity : Activity() {
         })
     }
 
+    private fun renderFilterControls() {
+        if (!::filterRow.isInitialized) return
+        filterRow.removeAllViews()
+        MediaTypeFilter.entries.forEachIndexed { index, filter ->
+            val selected = filter == selectedFilter
+            val button = Button(this).apply {
+                text = when (filter) {
+                    MediaTypeFilter.ALL -> "All"
+                    MediaTypeFilter.IMAGES -> "Images"
+                    MediaTypeFilter.VIDEOS -> "Videos"
+                }
+                isAllCaps = false
+                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                isEnabled = authorizedItems.isNotEmpty()
+                isActivated = selected
+                alpha = if (selected) 1f else 0.72f
+                contentDescription = "Show ${text.toString().lowercase()} in the current authorized library"
+                setOnClickListener {
+                    selectedFilter = filter
+                    renderFilterControls()
+                    renderAuthorizedSnapshot(loadGeneration)
+                }
+            }
+            filterRow.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index > 0) marginStart = dp(6)
+            })
+        }
+    }
+
     private fun renderPermissionState() {
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
             loadGeneration += 1
+            authorizedItems = emptyList()
             status.text = "Media permission is required before Gallery can read the local library."
             action.isEnabled = true
             action.text = "Choose media access"
             action.setOnClickListener { requestReadableMediaAccess() }
+            renderFilterControls()
             library.removeAllViews()
             library.addView(messageRow("No MediaStore query has been attempted."))
             return
@@ -174,10 +212,10 @@ class GalleryActivity : Activity() {
 
         thread(name = "goreecloud-gallery-mediastore") {
             try {
-                val result = AndroidMediaStoreReader(contentResolver)
-                    .readLatest(GalleryGlazeContract.MAX_RENDERED_MEDIA_ROWS)
+                val result = AndroidMediaStoreReader(contentResolver).readLatest(GalleryGlazeContract.MAX_RENDERED_MEDIA_ROWS)
                 runOnUiThread {
                     if (generation != loadGeneration) return@runOnUiThread
+                    authorizedItems = result.items
                     action.isEnabled = true
                     status.text = buildString {
                         append(accessScopeLabel(accessScope))
@@ -185,7 +223,8 @@ class GalleryActivity : Activity() {
                         if (result.items.size != 1) append('s')
                         if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} malformed row(s) skipped")
                     }
-                    renderItems(result.items, generation)
+                    renderFilterControls()
+                    renderAuthorizedSnapshot(generation)
                 }
             } catch (_: SecurityException) {
                 renderLoadFailure(generation, "Android denied the current MediaStore read. Review media access and try again.")
@@ -198,22 +237,29 @@ class GalleryActivity : Activity() {
     private fun renderLoadFailure(generation: Int, message: String) {
         runOnUiThread {
             if (generation != loadGeneration) return@runOnUiThread
+            authorizedItems = emptyList()
             action.isEnabled = true
             status.text = message
+            renderFilterControls()
             library.removeAllViews()
             library.addView(messageRow("No media list is shown because the authoritative provider read did not succeed."))
         }
     }
 
-    private fun renderItems(items: List<MediaItem>, generation: Int) {
+    private fun renderAuthorizedSnapshot(generation: Int) {
+        if (generation != loadGeneration) return
+        val filteredItems = selectedFilter.filter(authorizedItems)
         library.removeAllViews()
-        if (items.isEmpty()) {
-            library.addView(messageRow("No authorized image or video rows were returned."))
+        if (filteredItems.isEmpty()) {
+            val label = when (selectedFilter) {
+                MediaTypeFilter.ALL -> "image or video"
+                MediaTypeFilter.IMAGES -> "image"
+                MediaTypeFilter.VIDEOS -> "video"
+            }
+            library.addView(messageRow("No authorized $label rows are present in the current snapshot."))
             return
         }
-        items.forEachIndexed { index, item ->
-            library.addView(mediaRow(item, items, index, generation))
-        }
+        filteredItems.forEachIndexed { index, item -> library.addView(mediaRow(item, filteredItems, index, generation)) }
     }
 
     private fun mediaRow(item: MediaItem, items: List<MediaItem>, index: Int, generation: Int): LinearLayout {
@@ -233,12 +279,12 @@ class GalleryActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
             addView(TextView(context).apply {
-                setText(item.displayName)
+                text = item.displayName
                 setTextColor(primaryTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             })
             addView(TextView(context).apply {
-                setText(mediaMetadata(item))
+                text = mediaMetadata(item)
                 setTextColor(secondaryTextColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(5), 0, 0)
@@ -255,22 +301,14 @@ class GalleryActivity : Activity() {
             isFocusable = true
             contentDescription = "Open local preview for ${item.displayName}"
             setOnClickListener { showAuthorizedPreview(items, index, generation) }
-            addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply {
-                marginEnd = dp(12)
-            })
+            addView(thumbnail, LinearLayout.LayoutParams(dp(THUMBNAIL_DP), dp(THUMBNAIL_DP)).apply { marginEnd = dp(12) })
             addView(details, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(8)
-            }
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) }
         }
     }
 
     private fun showAuthorizedPreview(items: List<MediaItem>, initialIndex: Int, generation: Int) {
-        if (
-            generation != loadGeneration ||
-            !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
-            initialIndex !in items.indices
-        ) return
+        if (generation != loadGeneration || !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) || initialIndex !in items.indices) return
 
         val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
         val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
@@ -311,7 +349,6 @@ class GalleryActivity : Activity() {
             val previousButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
             val nextButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             val closeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-
             listOf(previousButton, nextButton, closeButton).forEach { button ->
                 button?.apply {
                     minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
@@ -320,15 +357,10 @@ class GalleryActivity : Activity() {
             }
 
             fun renderCurrentItem() {
-                if (
-                    generation != loadGeneration ||
-                    !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
-                    currentIndex !in items.indices
-                ) {
+                if (generation != loadGeneration || !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) || currentIndex !in items.indices) {
                     dialog.dismiss()
                     return
                 }
-
                 val item = items[currentIndex]
                 val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
                 dialog.setTitle(item.displayName)
@@ -345,19 +377,8 @@ class GalleryActivity : Activity() {
                 nextButton?.isEnabled = currentIndex < items.lastIndex
                 loadLocalThumbnail(item, preview, generation, VIEWER_PREVIEW_DP, VIEWER_THUMBNAIL_NAMESPACE)
             }
-
-            previousButton?.setOnClickListener {
-                if (currentIndex > 0) {
-                    currentIndex -= 1
-                    renderCurrentItem()
-                }
-            }
-            nextButton?.setOnClickListener {
-                if (currentIndex < items.lastIndex) {
-                    currentIndex += 1
-                    renderCurrentItem()
-                }
-            }
+            previousButton?.setOnClickListener { if (currentIndex > 0) { currentIndex -= 1; renderCurrentItem() } }
+            nextButton?.setOnClickListener { if (currentIndex < items.lastIndex) { currentIndex += 1; renderCurrentItem() } }
             renderCurrentItem()
         }
         dialog.show()
@@ -366,36 +387,18 @@ class GalleryActivity : Activity() {
     private fun mediaMetadata(item: MediaItem): String {
         val timestamp = item.capturedAt ?: item.modifiedAt
         val kind = if (item.mimeType.startsWith("video/")) "Video" else "Image"
-        return listOfNotNull(
-            kind,
-            item.albumName?.let { "Album: $it" },
-            DATE_TIME_FORMAT.format(timestamp),
-            formatBytes(item.sizeBytes),
-        ).joinToString(" · ")
+        return listOfNotNull(kind, item.albumName?.let { "Album: $it" }, DATE_TIME_FORMAT.format(timestamp), formatBytes(item.sizeBytes)).joinToString(" · ")
     }
 
-    private fun loadLocalThumbnail(
-        item: MediaItem,
-        target: ImageView,
-        generation: Int,
-        sizeDp: Int,
-        namespace: String,
-    ) {
+    private fun loadLocalThumbnail(item: MediaItem, target: ImageView, generation: Int, sizeDp: Int, namespace: String) {
         val cacheKey = thumbnailCacheKey(namespace, item.contentUri)
         thumbnailCache.get(cacheKey)?.let { cached ->
-            if (generation == loadGeneration && target.tag == cacheKey) {
-                target.setImageBitmap(cached)
-            }
+            if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(cached)
             return
         }
-
         thumbnailExecutor.execute {
             val bitmap = try {
-                contentResolver.loadThumbnail(
-                    Uri.parse(item.contentUri),
-                    Size(dp(sizeDp), dp(sizeDp)),
-                    null,
-                )
+                contentResolver.loadThumbnail(Uri.parse(item.contentUri), Size(dp(sizeDp), dp(sizeDp)), null)
             } catch (_: SecurityException) {
                 null
             } catch (_: RuntimeException) {
@@ -403,18 +406,14 @@ class GalleryActivity : Activity() {
             }
             if (bitmap == null) return@execute
             thumbnailCache.put(cacheKey, bitmap)
-            runOnUiThread {
-                if (generation == loadGeneration && target.tag == cacheKey) {
-                    target.setImageBitmap(bitmap)
-                }
-            }
+            runOnUiThread { if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(bitmap) }
         }
     }
 
     private fun thumbnailCacheKey(namespace: String, contentUri: String): String = "$namespace:$contentUri"
 
     private fun messageRow(message: String): TextView = TextView(this).apply {
-        setText(message)
+        text = message
         setTextColor(themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt()))
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         gravity = Gravity.START
@@ -429,8 +428,7 @@ class GalleryActivity : Activity() {
                 readExternalStorage = Build.VERSION.SDK_INT <= 32 && granted(Manifest.permission.READ_EXTERNAL_STORAGE),
                 readMediaImages = Build.VERSION.SDK_INT >= 33 && granted(Manifest.permission.READ_MEDIA_IMAGES),
                 readMediaVideo = Build.VERSION.SDK_INT >= 33 && granted(Manifest.permission.READ_MEDIA_VIDEO),
-                readMediaVisualUserSelected = Build.VERSION.SDK_INT >= 34 &&
-                    granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED),
+                readMediaVisualUserSelected = Build.VERSION.SDK_INT >= 34 && granted(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED),
             ),
         )
     }
@@ -451,10 +449,7 @@ class GalleryActivity : Activity() {
                 Manifest.permission.READ_MEDIA_VIDEO,
                 Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
             )
-            Build.VERSION.SDK_INT >= 33 -> arrayOf(
-                Manifest.permission.READ_MEDIA_IMAGES,
-                Manifest.permission.READ_MEDIA_VIDEO,
-            )
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
             else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
         requestPermissions(permissions, MEDIA_PERMISSION_REQUEST)
@@ -481,9 +476,7 @@ class GalleryActivity : Activity() {
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
         const val ROW_THUMBNAIL_NAMESPACE = "row"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
-        val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter
-            .ofPattern("MMM d, yyyy · h:mm a")
-            .withZone(ZoneId.systemDefault())
+        val DATE_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a").withZone(ZoneId.systemDefault())
 
         fun formatBytes(bytes: Long): String = when {
             bytes >= 1024L * 1024L -> String.format("%.1f MiB", bytes / (1024.0 * 1024.0))
