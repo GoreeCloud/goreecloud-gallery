@@ -445,6 +445,11 @@ class GalleryActivity : Activity() {
 
     private fun renderNavigation() {
         if (!::navigationCapsule.isInitialized || !::selectionActionCapsule.isInitialized) return
+        if (viewerOverlay != null) {
+            navigationCapsule.visibility = View.GONE
+            selectionActionCapsule.visibility = View.GONE
+            return
+        }
         if (inSelectionMode) {
             navigationCapsule.visibility = View.GONE
             selectionActionCapsule.visibility = View.VISIBLE
@@ -570,6 +575,7 @@ class GalleryActivity : Activity() {
         }
 
         val visibleItems = visibleAuthorizedItems()
+        val hasMediaAccess = GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())
 
         val collectionItems = when {
             destination == GalleryDestination.ALBUMS && showingFavorites ->
@@ -612,6 +618,7 @@ class GalleryActivity : Activity() {
         headerTitle.text = title
         headerSubtitle.text = when {
             destination == GalleryDestination.SETTINGS -> baseSubtitle
+            !hasMediaAccess -> "Media access required"
             visibleItems.isEmpty() -> baseSubtitle
             else -> "$baseSubtitle · ${sortOrderLabel()}"
         }
@@ -1262,6 +1269,8 @@ class GalleryActivity : Activity() {
 
         clearSelection(render = false)
         viewerOverlay?.let { rootFrame.removeView(it) }
+        navigationCapsule.visibility = View.GONE
+        selectionActionCapsule.visibility = View.GONE
 
         val overlay = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
@@ -1307,11 +1316,13 @@ class GalleryActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTypeface(typeface, Typeface.BOLD)
             maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         val viewerSubtitle = TextView(this).apply {
             setTextColor(0xffc8c8cc.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         val viewerTitles = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1762,19 +1773,137 @@ class GalleryActivity : Activity() {
 
     private fun showFileLoadingPriorityDialog() {
         val current = currentUserSettings().fileLoadingPriority
-        val values = GalleryFileLoadingPriority.entries.toTypedArray()
-        val labels = values.map { it.label }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("File loading priority")
-            .setSingleChoiceItems(labels, values.indexOf(current)) { dialog, which ->
-                val selected = values[which]
-                galleryPreferences().edit().putString(FILE_LOADING_PRIORITY_KEY, selected.storedValue).apply()
-                reconfigureThumbnailExecutor(selected)
-                renderSettingsDestinationOnly()
-                dialog.dismiss()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        var dialog: AlertDialog? = null
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(14))
+            background = roundedSurface(
+                if (isNightMode()) 0xff242426.toInt() else 0xffffffff.toInt(),
+                28,
+            )
+        }
+        panel.addView(TextView(this).apply {
+            text = "File loading priority"
+            setTextColor(primaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        panel.addView(TextView(this).apply {
+            text = "Choose how many local workers Gallery uses for thumbnail loading."
+            setTextColor(secondaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+            setLineSpacing(0f, 1.06f)
+            setPadding(0, dp(4), 0, dp(14))
+        })
+
+        GalleryFileLoadingPriority.entries.forEach { priority ->
+            val selected = priority == current
+            panel.addView(
+                glazeDialogChoiceRow(
+                    title = priority.label,
+                    subtitle = when (priority) {
+                        GalleryFileLoadingPriority.SLOW -> "1 local thumbnail worker"
+                        GalleryFileLoadingPriority.FAST -> "4 local thumbnail workers"
+                    },
+                    selected = selected,
+                ) {
+                    galleryPreferences().edit().putString(FILE_LOADING_PRIORITY_KEY, priority.storedValue).apply()
+                    reconfigureThumbnailExecutor(priority)
+                    renderSettingsDestinationOnly()
+                    dialog?.dismiss()
+                },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    bottomMargin = dp(7)
+                },
+            )
+        }
+
+        panel.addView(TextView(this).apply {
+            text = "Cancel"
+            gravity = Gravity.CENTER
+            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+            setTextColor(accentColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedSurface(Color.TRANSPARENT, 16)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Cancel file loading priority selection"
+            setOnClickListener { dialog?.dismiss() }
+        })
+
+        dialog = AlertDialog.Builder(this)
+            .setView(panel)
+            .create()
+        dialog?.setOnShowListener {
+            dialog?.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            dialog?.window?.setDimAmount(0.42f)
+            dialog?.window?.setLayout(
+                resources.displayMetrics.widthPixels - dp(32),
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            )
+        }
+        dialog?.show()
+        dialog?.window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        dialog?.window?.setDimAmount(0.42f)
+        dialog?.window?.setLayout(
+            resources.displayMetrics.widthPixels - dp(32),
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        )
+    }
+
+    private fun glazeDialogChoiceRow(
+        title: String,
+        subtitle: String,
+        selected: Boolean,
+        onClick: () -> Unit,
+    ): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(64)
+        setPadding(dp(14), dp(9), dp(10), dp(9))
+        background = roundedSurface(
+            if (selected) withAlpha(accentColor(), 0.13f)
+            else withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f),
+            18,
+        )
+        val labels = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        labels.addView(TextView(context).apply {
+            text = title
+            setTextColor(primaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        labels.addView(TextView(context).apply {
+            text = subtitle
+            setTextColor(secondaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            setPadding(0, dp(2), dp(8), 0)
+        })
+        addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(
+            TextView(context).apply {
+                text = if (selected) "✓" else ""
+                gravity = Gravity.CENTER
+                setTextColor(if (selected) Color.WHITE else secondaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTypeface(typeface, Typeface.BOLD)
+                background = roundedSurface(
+                    if (selected) accentColor() else withAlpha(primaryTextColor(), 0.06f),
+                    15,
+                )
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LinearLayout.LayoutParams(dp(30), dp(30)),
+        )
+        isClickable = true
+        isFocusable = true
+        isSelected = selected
+        contentDescription = "$title. $subtitle.${if (selected) " Selected." else ""}"
+        setOnClickListener { onClick() }
     }
 
     private fun showFolderSelectionDialog(includeMode: Boolean) {
