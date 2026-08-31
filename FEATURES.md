@@ -23,6 +23,63 @@ The target is to recover the established GoreeCloud Gallery information architec
 - Adaptive photo-first grid presentation in the current Glaze UI 2.1 Development candidate.
 - Glaze UI source mapping, adaptive gutters, light/dark presentation, and accessible control sizing foundations.
 
+## Historical screenshot restoration requirements
+
+The historical screenshots supplied for the native migration establish the following product requirements. These are restoration targets unless a later authoritative requirement intentionally supersedes them; they must not be represented as already implemented merely because they are documented here.
+
+### Photos / primary library
+
+- A media-dominant Photos surface with a dense multi-column thumbnail grid.
+- Fast access to search, sorting/grouping, layout/view controls, and overflow actions.
+- Clear navigation among the principal Gallery areas rather than exposing implementation/debug controls as the primary UI.
+- Rounded media presentation and compact chrome so photos and videos remain the dominant content.
+
+### Albums and folder browsing
+
+- A dedicated Albums experience using meaningful cover thumbnails, album names, and item counts.
+- Album/folder browsing that supports visually rich two-column or adaptive cover layouts where appropriate.
+- Search folders/albums plus contextual creation, organization, sorting, and overflow actions.
+- Album actions such as create, rename, reorder where supported, move/copy organization, hide/exclude policy, and details through Android-authorized boundaries.
+
+### Photo and media viewer
+
+- A full media viewer rather than a dialog-only preview.
+- Edge-to-edge media presentation with restrained top chrome and a bottom action surface.
+- Primary actions modeled around Send/Share, Favorite, Edit, Delete/Trash, and More/contextual actions.
+- Swipe/previous/next navigation within the currently authorized and presented collection.
+- Full-resolution image viewing and native video playback as separate implementation milestones.
+
+### Grouping, sorting, and timeline views
+
+- Chronological grouping by Today/date and other useful timeline units.
+- User-selectable grouping and sorting rather than only one fixed newest-first grid.
+- Timeline-oriented views capable of browsing media by capture date while retaining album/context identity.
+- View-density/layout controls where they improve browsing without overwhelming the primary interface.
+
+### Favorites
+
+- A first-party Favorites collection/surface.
+- Fast favorite/unfavorite action from the viewer and selection states.
+- Favorites remain device-local by default and must not require GoreeCloud Photos or network access.
+
+### Private Photos and hidden media
+
+- Private/hidden media is an established Gallery concept that must be restored with a current security design rather than copied literally from the historical pattern-lock UI.
+- Current implementation must use appropriate Android/GoreeCloud authentication and authorization boundaries, with GoreeCloud Identity where applicable and Privacy Shield governing consent, visibility, and user control.
+- Authentication methods such as device credentials/biometrics may be used only through supported secure platform mechanisms; Gallery must not invent insecure credential storage merely to mimic the historical UI.
+- Wardveil Security must govern applicable protection, validation, trust, and security-response responsibilities.
+
+### Settings and recycle/trash behavior
+
+- Gallery settings must include meaningful privacy/security, hidden-media, visible-action, organization, and recycle/trash controls where supported.
+- Recycle Bin / Trash behavior is a first-party product expectation, with restore and permanent-delete flows clearly distinguished.
+- Destructive operations must remain explicit and Android-authorized; historical UI is visual/behavioral migration evidence, not authority to bypass current Android safeguards.
+
+### Navigation model
+
+- The historical product used clear top-level destinations for media, albums, and video-oriented browsing. The current native implementation may modernize the exact tab labels and placement under Glaze UI 2.1, but it must preserve similarly direct access to the major Gallery domains.
+- Search and contextual actions must be reachable from the relevant browsing surface without forcing users through debug-style filter controls.
+
 ## Established Gallery capabilities to restore in the native replacement
 
 The exact migration set is governed by historical GoreeCloud Gallery behavior and screenshots, but the restoration program includes the mature Gallery areas below wherever they were part of the established product or are required to complete the intended Samsung Gallery-inspired experience:
@@ -47,7 +104,7 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 
 ## Development work still required
 
-- Restore the mature Samsung Gallery-inspired Pictures/Albums information architecture instead of relying on a single simplified browse surface.
+- Restore the mature Samsung Gallery-inspired Photos/Albums information architecture instead of relying on a single simplified browse surface.
 - Restore the established feature set above in bounded, testable native milestones.
 - Complete full-resolution image viewing and native video playback.
 - Complete editing, share/export, favorites, metadata, selection/multi-select, and approved destructive workflows.
