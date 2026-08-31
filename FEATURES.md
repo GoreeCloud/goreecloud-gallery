@@ -27,6 +27,8 @@ The target is to recover the established GoreeCloud Gallery information architec
 - Video items currently use authorized poster thumbnails; native playback is not yet implemented.
 - Permission and load-generation re-checks before viewer rendering.
 - Framework-independent album/trash/recovery/mutation foundations used by later native milestones.
+- Framework-independent **selection authority foundation**: selection can be toggled, selected-all, pruned, and resolved only against a caller-supplied current authorized/presented media scope. Stale or foreign content URIs are removed instead of becoming bulk-action authority.
+- Framework-independent **non-destructive bulk-action planning** for selected media: share plans preserve current presentation order and derive the narrowest safe MIME type, while bulk Favorites deterministically chooses Add unless every selected authorized item is already a Favorite. This is underlying selection/action policy; the rendered long-press multi-select surface is still a follow-on milestone.
 - Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation, and accessible control sizing foundations.
 
 ### Settings available in the `0.4.0-dev` candidate
@@ -136,7 +138,7 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 ## Development work still required
 
 - Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings shell and bounded viewer.
-- Add selection and multi-select with contextual bulk actions.
+- Connect the now-tested authorized selection/bulk-action policy to a rendered long-press multi-select experience with contextual Share/Favorite actions; destructive/move actions must remain unavailable until their mutation authorities are implemented and validated.
 - Add richer grouping modes, view-density/layout controls, album creation/rename/reorder, and approved move/copy organization.
 - Complete useful/full-resolution image viewing and native video playback, then connect the saved autoplay/loop preferences to accepted playback behavior.
 - Complete animated GIF thumbnail decoding before treating the saved GIF-animation preference as behaviorally active.
