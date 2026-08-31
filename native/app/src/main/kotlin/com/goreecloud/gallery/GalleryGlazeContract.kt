@@ -9,6 +9,10 @@ object GalleryGlazeContract {
     const val GENERAL_TARGET_DP = 48
     const val MAX_RENDERED_MEDIA_ROWS = 100
     const val MIN_GRID_TILE_DP = 92
+    const val MIN_ALBUM_TILE_DP = 132
+    const val NAVIGATION_HEIGHT_DP = 58
+    const val NAVIGATION_RADIUS_DP = 28
+    const val CONTENT_BOTTOM_INSET_DP = 112
 
     fun horizontalGutterDp(widthDp: Int): Int = when {
         widthDp >= 1200 -> 40
@@ -22,5 +26,12 @@ object GalleryGlazeContract {
         widthDp >= 840 -> 6
         widthDp >= 600 -> 5
         else -> 3
+    }
+
+    fun albumGridColumns(widthDp: Int): Int = when {
+        widthDp >= 1200 -> 5
+        widthDp >= 840 -> 4
+        widthDp >= 600 -> 3
+        else -> 2
     }
 }
