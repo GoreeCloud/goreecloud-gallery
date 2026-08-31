@@ -13,6 +13,7 @@
         <item name="android:colorAccent">#5FC9BB</item>
         <item name="android:textColorPrimary">#F5F5F7</item>
         <item name="android:textColorSecondary">#B8B8BE</item>
+        <item name="android:listChoiceIndicatorMultiple">@drawable/glaze_choice_checkbox</item>
         <item name="android:windowBackground">@drawable/glaze_dialog_background</item>
         <item name="android:windowElevation">16dp</item>
         <item name="android:backgroundDimEnabled">true</item>
