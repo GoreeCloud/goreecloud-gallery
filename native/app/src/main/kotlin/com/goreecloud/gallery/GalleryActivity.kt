@@ -35,9 +35,13 @@ import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaSortOrder
 import com.goreecloud.gallery.core.buildAlbumCatalog
 import com.goreecloud.gallery.core.sort
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
@@ -57,7 +61,8 @@ class GalleryActivity : Activity() {
     private lateinit var library: LinearLayout
     private lateinit var navigationCapsule: LinearLayout
 
-    private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
+    private var thumbnailWorkerCount = GalleryFileLoadingPriority.FAST.thumbnailWorkerCount
+    private var thumbnailExecutor: ExecutorService = Executors.newFixedThreadPool(thumbnailWorkerCount)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
         override fun sizeOf(key: String, value: Bitmap): Int = maxOf(1, value.allocationByteCount / 1024)
     }
@@ -74,15 +79,42 @@ class GalleryActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        favoriteUris += getSharedPreferences(LOCAL_STATE_PREFERENCES, MODE_PRIVATE)
+        favoriteUris += galleryPreferences()
             .getStringSet(FAVORITES_KEY, emptySet())
             .orEmpty()
+        reconfigureThumbnailExecutor(currentUserSettings().fileLoadingPriority)
         buildSurface()
     }
 
     override fun onResume() {
         super.onResume()
-        if (viewerOverlay == null) renderPermissionState()
+        if (viewerOverlay != null) return
+        if (destination == GalleryDestination.SETTINGS) {
+            renderCurrentDestination()
+        } else {
+            renderPermissionState()
+        }
+    }
+
+    @Deprecated("The Development Gallery uses Android document intents for local import/export portability.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        when (requestCode) {
+            EXPORT_FAVORITES_REQUEST -> writeJsonDocument(
+                uri = uri,
+                json = buildFavoritesExportJson(),
+                successMessage = "Favorites exported",
+            )
+            IMPORT_FAVORITES_REQUEST -> readJsonDocument(uri) { importFavorites(it) }
+            EXPORT_SETTINGS_REQUEST -> writeJsonDocument(
+                uri = uri,
+                json = buildSettingsExportJson(),
+                successMessage = "Gallery settings exported",
+            )
+            IMPORT_SETTINGS_REQUEST -> readJsonDocument(uri) { importSettings(it) }
+        }
     }
 
     override fun onDestroy() {
@@ -386,13 +418,14 @@ class GalleryActivity : Activity() {
                 GalleryDestination.PHOTOS -> "Photos"
                 GalleryDestination.ALBUMS -> "Albums"
                 GalleryDestination.VIDEOS -> "Videos"
+                GalleryDestination.SETTINGS -> "Settings"
             }
             navigationCapsule.addView(
                 TextView(this).apply {
                     text = label
                     gravity = Gravity.CENTER
                     minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
                     setTextColor(if (selected) accentColor() else primaryTextColor())
                     if (selected) setTypeface(typeface, Typeface.BOLD)
                     background = roundedSurface(
@@ -424,52 +457,66 @@ class GalleryActivity : Activity() {
 
     private fun updateHeader() {
         if (!::headerTitle.isInitialized) return
+        val visibleItems = visibleAuthorizedItems()
 
         val collectionItems = when {
             destination == GalleryDestination.ALBUMS && showingFavorites ->
-                authorizedItems.filter { it.contentUri in favoriteUris }
+                visibleItems.filter { it.contentUri in favoriteUris }
             destination == GalleryDestination.ALBUMS && openAlbumId != null ->
-                authorizedItems.filter { it.albumId == openAlbumId }
+                visibleItems.filter { it.albumId == openAlbumId }
             else -> emptyList()
         }
 
         val title = when {
             destination == GalleryDestination.ALBUMS && showingFavorites -> "Favorites"
             destination == GalleryDestination.ALBUMS && openAlbumId != null ->
-                authorizedItems.firstOrNull { it.albumId == openAlbumId }?.albumName ?: "Album"
+                visibleItems.firstOrNull { it.albumId == openAlbumId }?.albumName
+                    ?: authorizedItems.firstOrNull { it.albumId == openAlbumId }?.albumName
+                    ?: "Album"
             destination == GalleryDestination.PHOTOS -> "Photos"
             destination == GalleryDestination.ALBUMS -> "Albums"
             destination == GalleryDestination.VIDEOS -> "Videos"
-            else -> "Gallery"
+            destination == GalleryDestination.SETTINGS -> "Settings"
         }
 
         val baseSubtitle = when {
+            destination == GalleryDestination.SETTINGS -> "Local Gallery preferences"
             destination == GalleryDestination.ALBUMS && (showingFavorites || openAlbumId != null) ->
                 itemCountLabel(collectionItems.size)
             destination == GalleryDestination.PHOTOS ->
-                itemCountLabel(authorizedItems.count { it.mimeType.startsWith("image/") })
+                itemCountLabel(visibleItems.count { it.mimeType.startsWith("image/") })
             destination == GalleryDestination.VIDEOS ->
-                itemCountLabel(authorizedItems.count { it.mimeType.startsWith("video/") })
+                itemCountLabel(visibleItems.count { it.mimeType.startsWith("video/") })
             destination == GalleryDestination.ALBUMS -> {
-                val albumCount = authorizedItems.buildAlbumCatalog().size
-                val favoriteSuffix = if (favoriteUris.any { uri -> authorizedItems.any { it.contentUri == uri } }) 1 else 0
+                val albumCount = visibleItems.buildAlbumCatalog().size
+                val favoriteSuffix = if (favoriteUris.any { uri -> visibleItems.any { it.contentUri == uri } }) 1 else 0
                 val totalCollections = albumCount + favoriteSuffix
                 if (totalCollections == 1) "1 collection" else "$totalCollections collections"
             }
-            else -> ""
         }
 
         headerTitle.text = title
-        headerSubtitle.text = if (authorizedItems.isEmpty()) baseSubtitle else "$baseSubtitle · ${sortOrderLabel()}"
+        headerSubtitle.text = when {
+            destination == GalleryDestination.SETTINGS -> baseSubtitle
+            visibleItems.isEmpty() -> baseSubtitle
+            else -> "$baseSubtitle · ${sortOrderLabel()}"
+        }
         backControl.visibility =
             if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) View.VISIBLE
             else View.GONE
         sortControl.contentDescription = "Sort order: ${sortOrderLabel()}. Double tap to change."
-        sortControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
-        searchControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
+        val showMediaControls = destination != GalleryDestination.SETTINGS && visibleItems.isNotEmpty()
+        sortControl.visibility = if (showMediaControls) View.VISIBLE else View.GONE
+        searchControl.visibility = if (showMediaControls) View.VISIBLE else View.GONE
     }
 
     private fun renderPermissionState() {
+        if (destination == GalleryDestination.SETTINGS) {
+            accessPanel.visibility = View.GONE
+            renderCurrentDestination()
+            return
+        }
+
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
             loadGeneration += 1
@@ -578,16 +625,25 @@ class GalleryActivity : Activity() {
 
     private fun renderCurrentDestination(generation: Int = loadGeneration) {
         if (generation != loadGeneration) return
-        if (!GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
 
         updateHeader()
         renderNavigation()
         library.removeAllViews()
 
+        if (destination == GalleryDestination.SETTINGS) {
+            accessPanel.visibility = View.GONE
+            if (searchContainer.visibility == View.VISIBLE) closeSearch(clearQuery = false)
+            renderSettings()
+            return
+        }
+
+        if (!GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
+        val visibleItems = visibleAuthorizedItems()
+
         when (destination) {
             GalleryDestination.PHOTOS -> {
                 val items = selectedSort.sort(
-                    authorizedItems
+                    visibleItems
                         .filter { it.mimeType.startsWith("image/") }
                         .filter(::matchesSearch),
                 )
@@ -596,15 +652,19 @@ class GalleryActivity : Activity() {
                     generation = generation,
                     emptyTitle = if (searchQuery.isBlank()) "No photos yet" else "No photo results",
                     emptyMessage = if (searchQuery.isBlank()) {
-                        "No authorized photos are available in this library."
+                        if (authorizedItems.any { it.mimeType.startsWith("image/") }) {
+                            "No photos match the current folder or hidden-item visibility settings."
+                        } else {
+                            "No authorized photos are available in this library."
+                        }
                     } else {
-                        "No authorized photos match “$searchQuery”."
+                        "No visible authorized photos match “$searchQuery”."
                     },
                 )
             }
             GalleryDestination.VIDEOS -> {
                 val items = selectedSort.sort(
-                    authorizedItems
+                    visibleItems
                         .filter { it.mimeType.startsWith("video/") }
                         .filter(::matchesSearch),
                 )
@@ -613,16 +673,20 @@ class GalleryActivity : Activity() {
                     generation = generation,
                     emptyTitle = if (searchQuery.isBlank()) "No videos yet" else "No video results",
                     emptyMessage = if (searchQuery.isBlank()) {
-                        "No authorized videos are available in this library."
+                        if (authorizedItems.any { it.mimeType.startsWith("video/") }) {
+                            "No videos match the current folder or hidden-item visibility settings."
+                        } else {
+                            "No authorized videos are available in this library."
+                        }
                     } else {
-                        "No authorized videos match “$searchQuery”."
+                        "No visible authorized videos match “$searchQuery”."
                     },
                 )
             }
             GalleryDestination.ALBUMS -> when {
                 showingFavorites -> {
                     val items = selectedSort.sort(
-                        authorizedItems
+                        visibleItems
                             .filter { it.contentUri in favoriteUris }
                             .filter(::matchesSearch),
                     )
@@ -631,16 +695,16 @@ class GalleryActivity : Activity() {
                         generation = generation,
                         emptyTitle = if (searchQuery.isBlank()) "No favorites yet" else "No favorite results",
                         emptyMessage = if (searchQuery.isBlank()) {
-                            "Mark a photo or video as a favorite from the viewer to keep it here."
+                            "Mark a visible photo or video as a favorite from the viewer to keep it here."
                         } else {
-                            "No authorized favorites match “$searchQuery”."
+                            "No visible authorized favorites match “$searchQuery”."
                         },
                     )
                 }
                 openAlbumId != null -> {
                     val albumId = openAlbumId
                     val items = selectedSort.sort(
-                        authorizedItems
+                        visibleItems
                             .filter { it.albumId == albumId }
                             .filter(::matchesSearch),
                     )
@@ -649,14 +713,15 @@ class GalleryActivity : Activity() {
                         generation = generation,
                         emptyTitle = if (searchQuery.isBlank()) "Album is empty" else "No album results",
                         emptyMessage = if (searchQuery.isBlank()) {
-                            "No authorized media is currently available in this album."
+                            "No visible authorized media is currently available in this album."
                         } else {
-                            "No authorized items in this album match “$searchQuery”."
+                            "No visible authorized items in this album match “$searchQuery”."
                         },
                     )
                 }
-                else -> renderAlbums(generation)
+                else -> renderAlbums(generation, visibleItems)
             }
+            GalleryDestination.SETTINGS -> Unit
         }
     }
 
@@ -682,15 +747,15 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun renderAlbums(generation: Int) {
+    private fun renderAlbums(generation: Int, sourceItems: List<MediaItem>) {
         val query = searchQuery.lowercase()
-        val catalog = authorizedItems.buildAlbumCatalog()
+        val catalog = sourceItems.buildAlbumCatalog()
             .let { albums ->
                 if (selectedSort == MediaSortOrder.NEWEST) albums else albums.sortedBy { it.newestAt }
             }
             .filter { query.isBlank() || it.displayName.lowercase().contains(query) }
 
-        val favoriteItems = authorizedItems
+        val favoriteItems = sourceItems
             .filter { it.contentUri in favoriteUris }
             .let(selectedSort::sort)
 
@@ -702,9 +767,9 @@ class GalleryActivity : Activity() {
                 emptyState(
                     if (searchQuery.isBlank()) "No albums yet" else "No album results",
                     if (searchQuery.isBlank()) {
-                        "Gallery could not derive any authorized local albums from Android media metadata."
+                        "No visible authorized albums are available with the current Gallery settings."
                     } else {
-                        "No authorized albums match “$searchQuery”."
+                        "No visible authorized albums match “$searchQuery”."
                     },
                 ),
             )
@@ -724,7 +789,7 @@ class GalleryActivity : Activity() {
             )
         }
         catalog.forEach { album ->
-            val cover = authorizedItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
+            val cover = sourceItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
             tiles += AlbumPresentation(
                 id = album.id,
                 name = album.displayName,
@@ -777,9 +842,10 @@ class GalleryActivity : Activity() {
     }
 
     private fun albumTile(album: AlbumPresentation, generation: Int, tileWidth: Int): LinearLayout {
+        val cornerDp = thumbnailCornerDp(ALBUM_CORNER_DP)
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = roundedSurface(withAlpha(primaryTextColor(), 0.08f), ALBUM_CORNER_DP)
+            background = roundedSurface(withAlpha(primaryTextColor(), 0.08f), cornerDp)
             clipToOutline = true
             tag = thumbnailCacheKey(ALBUM_THUMBNAIL_NAMESPACE, album.cover.contentUri)
         }
@@ -873,16 +939,17 @@ class GalleryActivity : Activity() {
     ): FrameLayout {
         val placeholder = withAlpha(primaryTextColor(), 0.08f)
         val cacheKey = thumbnailCacheKey(GRID_THUMBNAIL_NAMESPACE, item.contentUri)
+        val cornerDp = thumbnailCornerDp(GRID_CORNER_DP)
         val thumbnail = ImageView(this).apply {
             tag = cacheKey
             contentDescription = null
             scaleType = ImageView.ScaleType.CENTER_CROP
-            background = roundedSurface(placeholder, GRID_CORNER_DP)
+            background = roundedSurface(placeholder, cornerDp)
         }
         loadLocalThumbnail(item, thumbnail, generation, GRID_THUMBNAIL_DP, GRID_THUMBNAIL_NAMESPACE)
 
         return FrameLayout(this).apply {
-            background = roundedSurface(placeholder, GRID_CORNER_DP)
+            background = roundedSurface(placeholder, cornerDp)
             clipToOutline = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             isClickable = true
@@ -1126,11 +1193,15 @@ class GalleryActivity : Activity() {
             favoriteUris.add(item.contentUri)
             Toast.makeText(this, "Added to Favorites", Toast.LENGTH_SHORT).show()
         }
-        getSharedPreferences(LOCAL_STATE_PREFERENCES, MODE_PRIVATE)
+        persistFavorites()
+        updateHeader()
+    }
+
+    private fun persistFavorites() {
+        galleryPreferences()
             .edit()
             .putStringSet(FAVORITES_KEY, favoriteUris.toSet())
             .apply()
-        updateHeader()
     }
 
     private fun showItemDetails(item: MediaItem) {
@@ -1151,6 +1222,527 @@ class GalleryActivity : Activity() {
             .setPositiveButton("Done", null)
             .show()
     }
+
+    private fun renderSettings() {
+        val settings = currentUserSettings()
+
+        library.addView(settingsSectionHeader("Performance"))
+        library.addView(
+            settingChoiceRow(
+                title = "File loading priority",
+                subtitle = "Slow uses one thumbnail worker. Fast uses four local thumbnail workers.",
+                value = settings.fileLoadingPriority.label,
+            ) { showFileLoadingPriorityDialog() },
+        )
+
+        library.addView(settingsSectionHeader("Library"))
+        library.addView(
+            settingChoiceRow(
+                title = "Manage included folders",
+                subtitle = "Limit Gallery to selected folders from the current Android-authorized snapshot.",
+                value = if (settings.includedAlbumIds.isEmpty()) "All" else settings.includedAlbumIds.size.toString(),
+            ) { showFolderSelectionDialog(includeMode = true) },
+        )
+        library.addView(
+            settingChoiceRow(
+                title = "Manage excluded folders",
+                subtitle = "Hide selected folders without changing Android media permission authority.",
+                value = if (settings.excludedAlbumIds.isEmpty()) "None" else settings.excludedAlbumIds.size.toString(),
+            ) { showFolderSelectionDialog(includeMode = false) },
+        )
+        library.addView(
+            settingToggleRow(
+                title = "Show hidden items",
+                subtitle = "Shows hidden-looking items only when Android includes them in the authorized MediaStore snapshot.",
+                checked = settings.showHiddenItems,
+            ) { setBooleanSetting(SHOW_HIDDEN_ITEMS_KEY, it) },
+        )
+
+        library.addView(settingsSectionHeader("Playback"))
+        library.addView(
+            settingToggleRow(
+                title = "Play videos automatically",
+                subtitle = "Preference is saved now and will apply when native video playback is enabled.",
+                checked = settings.playVideosAutomatically,
+            ) { setBooleanSetting(PLAY_VIDEOS_AUTOMATICALLY_KEY, it) },
+        )
+        library.addView(
+            settingToggleRow(
+                title = "Loop videos",
+                subtitle = "Preference is saved now and will apply when native video playback is enabled.",
+                checked = settings.loopVideos,
+            ) { setBooleanSetting(LOOP_VIDEOS_KEY, it) },
+        )
+        library.addView(
+            settingToggleRow(
+                title = "Animate GIFs in thumbnails",
+                subtitle = "Preference is saved now; animated thumbnail decoding is not enabled in this Development build.",
+                checked = settings.animateGifThumbnails,
+            ) { setBooleanSetting(ANIMATE_GIF_THUMBNAILS_KEY, it) },
+        )
+
+        library.addView(settingsSectionHeader("Privacy & protection"))
+        library.addView(
+            settingChoiceRow(
+                title = "Password protect photos",
+                subtitle = "Requires the secure Protected Photos implementation and supported GoreeCloud/Android authentication.",
+                value = "Not yet",
+                enabled = true,
+            ) { explainPasswordProtectionBoundary() },
+        )
+
+        library.addView(settingsSectionHeader("Deletion & recovery"))
+        library.addView(
+            settingToggleRow(
+                title = "Delete empty folders after deleting their content",
+                subtitle = "Preference is saved now; approved destructive media workflows are not enabled in this Development build.",
+                checked = settings.deleteEmptyFolders,
+            ) { setBooleanSetting(DELETE_EMPTY_FOLDERS_KEY, it) },
+        )
+        library.addView(
+            settingToggleRow(
+                title = "Move deleted items to Recycle Bin",
+                subtitle = "Enabled by default. Preference applies when the approved Delete/Trash workflow is enabled.",
+                checked = settings.moveDeletedItemsToRecycleBin,
+            ) { setBooleanSetting(MOVE_DELETED_TO_RECYCLE_BIN_KEY, it) },
+        )
+
+        library.addView(settingsSectionHeader("Appearance"))
+        library.addView(
+            settingToggleRow(
+                title = "Rounded-square thumbnails",
+                subtitle = "Use GoreeCloud rounded-square clipping for media and album thumbnails.",
+                checked = settings.roundedSquareThumbnails,
+            ) { setBooleanSetting(ROUNDED_SQUARE_THUMBNAILS_KEY, it) },
+        )
+
+        library.addView(settingsSectionHeader("Cache"))
+        library.addView(
+            settingActionRow(
+                title = "Clear cache",
+                subtitle = "Clears the current in-memory thumbnail cache. Photos and videos are never deleted.",
+                actionLabel = "Clear",
+            ) {
+                thumbnailCache.evictAll()
+                Toast.makeText(this, "Thumbnail cache cleared", Toast.LENGTH_SHORT).show()
+            },
+        )
+
+        library.addView(settingsSectionHeader("Favorites"))
+        library.addView(
+            settingActionRow(
+                title = "Export Favorites",
+                subtitle = "Export Gallery's local favorite content-URI list. Media files are not exported.",
+                actionLabel = "Export",
+            ) { createJsonDocument(EXPORT_FAVORITES_REQUEST, "GoreeCloud-Gallery-Favorites.json") },
+        )
+        library.addView(
+            settingActionRow(
+                title = "Import Favorites",
+                subtitle = "Merge a Gallery Favorites export into the local Favorites set without expanding media permission.",
+                actionLabel = "Import",
+            ) { openJsonDocument(IMPORT_FAVORITES_REQUEST) },
+        )
+
+        library.addView(settingsSectionHeader("Settings portability"))
+        library.addView(
+            settingActionRow(
+                title = "Export settings",
+                subtitle = "Export non-secret Gallery preferences, including folder visibility selections.",
+                actionLabel = "Export",
+            ) { createJsonDocument(EXPORT_SETTINGS_REQUEST, "GoreeCloud-Gallery-Settings.json") },
+        )
+        library.addView(
+            settingActionRow(
+                title = "Import settings",
+                subtitle = "Import a compatible GoreeCloud Gallery settings file. Unknown fields are ignored.",
+                actionLabel = "Import",
+            ) { openJsonDocument(IMPORT_SETTINGS_REQUEST) },
+        )
+    }
+
+    private fun settingsSectionHeader(label: String): TextView = TextView(this).apply {
+        text = label
+        setTextColor(primaryTextColor())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(2), dp(18), 0, dp(7))
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+
+    private fun settingChoiceRow(
+        title: String,
+        subtitle: String,
+        value: String,
+        enabled: Boolean = true,
+        onClick: () -> Unit,
+    ): LinearLayout = settingBaseRow(
+        title = title,
+        subtitle = subtitle,
+        enabled = enabled,
+        trailing = settingsPill(value, emphasized = false),
+        onClick = onClick,
+    )
+
+    private fun settingActionRow(
+        title: String,
+        subtitle: String,
+        actionLabel: String,
+        onClick: () -> Unit,
+    ): LinearLayout = settingBaseRow(
+        title = title,
+        subtitle = subtitle,
+        enabled = true,
+        trailing = settingsPill(actionLabel, emphasized = true),
+        onClick = onClick,
+    )
+
+    private fun settingToggleRow(
+        title: String,
+        subtitle: String,
+        checked: Boolean,
+        onToggle: (Boolean) -> Unit,
+    ): LinearLayout = settingBaseRow(
+        title = title,
+        subtitle = subtitle,
+        enabled = true,
+        trailing = settingsPill(if (checked) "On" else "Off", emphasized = checked),
+    ) {
+        onToggle(!checked)
+        renderSettingsDestinationOnly()
+    }
+
+    private fun settingBaseRow(
+        title: String,
+        subtitle: String,
+        enabled: Boolean,
+        trailing: View,
+        onClick: () -> Unit,
+    ): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dp(68)
+            setPadding(dp(14), dp(10), dp(10), dp(10))
+            background = roundedSurface(
+                withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f),
+                17,
+            )
+            alpha = if (enabled) 1f else 0.55f
+
+            val labels = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            labels.addView(TextView(context).apply {
+                text = title
+                setTextColor(primaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14.5f)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            labels.addView(TextView(context).apply {
+                text = subtitle
+                setTextColor(secondaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+                setLineSpacing(0f, 1.06f)
+                setPadding(0, dp(3), dp(8), 0)
+            })
+            addView(labels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(trailing)
+
+            isClickable = enabled
+            isFocusable = enabled
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            contentDescription = "$title. $subtitle"
+            if (enabled) setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                bottomMargin = dp(6)
+            }
+        }
+    }
+
+    private fun settingsPill(label: String, emphasized: Boolean): TextView = TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        minWidth = dp(52)
+        minHeight = dp(36)
+        setPadding(dp(10), 0, dp(10), 0)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(if (emphasized) accentColor() else primaryTextColor())
+        background = roundedSurface(
+            if (emphasized) withAlpha(accentColor(), 0.13f)
+            else withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.055f),
+            14,
+        )
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    private fun renderSettingsDestinationOnly() {
+        if (destination != GalleryDestination.SETTINGS) return
+        updateHeader()
+        library.removeAllViews()
+        renderSettings()
+    }
+
+    private fun showFileLoadingPriorityDialog() {
+        val current = currentUserSettings().fileLoadingPriority
+        val values = GalleryFileLoadingPriority.entries.toTypedArray()
+        val labels = values.map { it.label }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("File loading priority")
+            .setSingleChoiceItems(labels, values.indexOf(current)) { dialog, which ->
+                val selected = values[which]
+                galleryPreferences().edit().putString(FILE_LOADING_PRIORITY_KEY, selected.storedValue).apply()
+                reconfigureThumbnailExecutor(selected)
+                renderSettingsDestinationOnly()
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showFolderSelectionDialog(includeMode: Boolean) {
+        val albums = authorizedItems.buildAlbumCatalog().sortedBy { it.displayName.lowercase() }
+        if (albums.isEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle(if (includeMode) "Included folders" else "Excluded folders")
+                .setMessage(
+                    "No authorized folders are available in the current Gallery snapshot. Grant media access from Photos first, or return after the library has loaded.",
+                )
+                .setPositiveButton("Done", null)
+                .show()
+            return
+        }
+
+        val key = if (includeMode) INCLUDED_ALBUM_IDS_KEY else EXCLUDED_ALBUM_IDS_KEY
+        val selected = galleryPreferences().getStringSet(key, emptySet()).orEmpty().toMutableSet()
+        val labels = albums.map { "${it.displayName} · ${itemCountLabel(it.itemCount)}" }.toTypedArray()
+        val checked = BooleanArray(albums.size) { albums[it].id in selected }
+
+        AlertDialog.Builder(this)
+            .setTitle(if (includeMode) "Manage included folders" else "Manage excluded folders")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                val albumId = albums[which].id
+                if (isChecked) selected.add(albumId) else selected.remove(albumId)
+            }
+            .setPositiveButton("Save") { _, _ ->
+                galleryPreferences().edit().putStringSet(key, selected.toSet()).apply()
+                renderSettingsDestinationOnly()
+            }
+            .setNeutralButton("Clear") { _, _ ->
+                galleryPreferences().edit().remove(key).apply()
+                renderSettingsDestinationOnly()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun explainPasswordProtectionBoundary() {
+        AlertDialog.Builder(this)
+            .setTitle("Password protect photos")
+            .setMessage(
+                "Protected Photos is a required Gallery capability, but this Development build does not yet provide a secure protected-media store. " +
+                    "Gallery will not fake protection with an app-local password toggle. The production implementation must use supported Android/GoreeCloud authentication, protected storage, Privacy Shield consent controls, and Wardveil trust boundaries before this setting becomes active.",
+            )
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun setBooleanSetting(key: String, value: Boolean) {
+        galleryPreferences().edit().putBoolean(key, value).apply()
+    }
+
+    private fun currentUserSettings(): GalleryUserSettings {
+        val preferences = galleryPreferences()
+        return GalleryUserSettings(
+            fileLoadingPriority = GalleryFileLoadingPriority.fromStored(
+                preferences.getString(FILE_LOADING_PRIORITY_KEY, GalleryFileLoadingPriority.FAST.storedValue),
+            ),
+            includedAlbumIds = preferences.getStringSet(INCLUDED_ALBUM_IDS_KEY, emptySet()).orEmpty().toSet(),
+            excludedAlbumIds = preferences.getStringSet(EXCLUDED_ALBUM_IDS_KEY, emptySet()).orEmpty().toSet(),
+            showHiddenItems = preferences.getBoolean(SHOW_HIDDEN_ITEMS_KEY, false),
+            playVideosAutomatically = preferences.getBoolean(PLAY_VIDEOS_AUTOMATICALLY_KEY, false),
+            loopVideos = preferences.getBoolean(LOOP_VIDEOS_KEY, false),
+            animateGifThumbnails = preferences.getBoolean(ANIMATE_GIF_THUMBNAILS_KEY, false),
+            deleteEmptyFolders = preferences.getBoolean(DELETE_EMPTY_FOLDERS_KEY, false),
+            moveDeletedItemsToRecycleBin = preferences.getBoolean(MOVE_DELETED_TO_RECYCLE_BIN_KEY, true),
+            roundedSquareThumbnails = preferences.getBoolean(ROUNDED_SQUARE_THUMBNAILS_KEY, true),
+        )
+    }
+
+    private fun visibleAuthorizedItems(): List<MediaItem> =
+        GallerySettingsPolicy.visibleItems(authorizedItems, currentUserSettings())
+
+    private fun thumbnailCornerDp(defaultCornerDp: Int): Int =
+        if (currentUserSettings().roundedSquareThumbnails) defaultCornerDp else 0
+
+    private fun reconfigureThumbnailExecutor(priority: GalleryFileLoadingPriority) {
+        val desiredWorkers = priority.thumbnailWorkerCount
+        if (desiredWorkers == thumbnailWorkerCount) return
+        thumbnailExecutor.shutdownNow()
+        thumbnailWorkerCount = desiredWorkers
+        thumbnailExecutor = Executors.newFixedThreadPool(thumbnailWorkerCount)
+    }
+
+    private fun createJsonDocument(requestCode: Int, suggestedName: String) {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, suggestedName)
+        }
+        try {
+            startActivityForResult(intent, requestCode)
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "No document provider is available.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openJsonDocument(requestCode: Int) {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        try {
+            startActivityForResult(intent, requestCode)
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "No document provider is available.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun writeJsonDocument(uri: Uri, json: JSONObject, successMessage: String) {
+        try {
+            val stream = contentResolver.openOutputStream(uri) ?: throw IOException("Unable to open output document")
+            stream.bufferedWriter(Charsets.UTF_8).use { it.write(json.toString(2)) }
+            Toast.makeText(this, successMessage, Toast.LENGTH_SHORT).show()
+        } catch (_: Exception) {
+            Toast.makeText(this, "The export could not be written.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun readJsonDocument(uri: Uri, consume: (JSONObject) -> Unit) {
+        try {
+            val stream = contentResolver.openInputStream(uri) ?: throw IOException("Unable to open input document")
+            val text = stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            consume(JSONObject(text))
+        } catch (_: Exception) {
+            Toast.makeText(this, "The selected Gallery file could not be imported.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun buildFavoritesExportJson(): JSONObject {
+        val favorites = JSONArray()
+        favoriteUris.sorted().forEach { favorites.put(it) }
+        return JSONObject()
+            .put("type", FAVORITES_EXPORT_TYPE)
+            .put("schemaVersion", GallerySettingsPolicy.EXPORT_SCHEMA_VERSION)
+            .put("favorites", favorites)
+    }
+
+    private fun importFavorites(json: JSONObject) {
+        if (json.optString("type") != FAVORITES_EXPORT_TYPE) {
+            throw IllegalArgumentException("Not a GoreeCloud Gallery Favorites export")
+        }
+        val array = json.getJSONArray("favorites")
+        val before = favoriteUris.size
+        for (index in 0 until array.length()) {
+            val uri = array.optString(index).trim()
+            if (uri.isNotBlank()) favoriteUris.add(uri)
+        }
+        persistFavorites()
+        val added = favoriteUris.size - before
+        Toast.makeText(
+            this,
+            if (added == 1) "Imported 1 new Favorite" else "Imported $added new Favorites",
+            Toast.LENGTH_SHORT,
+        ).show()
+        updateHeader()
+        renderSettingsDestinationOnly()
+    }
+
+    private fun buildSettingsExportJson(): JSONObject {
+        val settings = currentUserSettings()
+        return JSONObject()
+            .put("type", SETTINGS_EXPORT_TYPE)
+            .put("schemaVersion", GallerySettingsPolicy.EXPORT_SCHEMA_VERSION)
+            .put("fileLoadingPriority", settings.fileLoadingPriority.storedValue)
+            .put("includedAlbumIds", stringSetJson(settings.includedAlbumIds))
+            .put("excludedAlbumIds", stringSetJson(settings.excludedAlbumIds))
+            .put("showHiddenItems", settings.showHiddenItems)
+            .put("playVideosAutomatically", settings.playVideosAutomatically)
+            .put("loopVideos", settings.loopVideos)
+            .put("animateGifThumbnails", settings.animateGifThumbnails)
+            .put("deleteEmptyFolders", settings.deleteEmptyFolders)
+            .put("moveDeletedItemsToRecycleBin", settings.moveDeletedItemsToRecycleBin)
+            .put("roundedSquareThumbnails", settings.roundedSquareThumbnails)
+    }
+
+    private fun importSettings(json: JSONObject) {
+        if (json.optString("type") != SETTINGS_EXPORT_TYPE) {
+            throw IllegalArgumentException("Not a GoreeCloud Gallery settings export")
+        }
+        val current = currentUserSettings()
+        val rawPriority = json.optString("fileLoadingPriority", current.fileLoadingPriority.storedValue)
+        val importedPriority = GalleryFileLoadingPriority.entries.firstOrNull { it.storedValue == rawPriority }
+            ?: throw IllegalArgumentException("Unsupported loading priority")
+
+        galleryPreferences().edit()
+            .putString(FILE_LOADING_PRIORITY_KEY, importedPriority.storedValue)
+            .putStringSet(
+                INCLUDED_ALBUM_IDS_KEY,
+                json.optJSONArray("includedAlbumIds")?.let(::jsonStringSet) ?: current.includedAlbumIds,
+            )
+            .putStringSet(
+                EXCLUDED_ALBUM_IDS_KEY,
+                json.optJSONArray("excludedAlbumIds")?.let(::jsonStringSet) ?: current.excludedAlbumIds,
+            )
+            .putBoolean("show_hidden_items", json.optBoolean("showHiddenItems", current.showHiddenItems))
+            .putBoolean(
+                PLAY_VIDEOS_AUTOMATICALLY_KEY,
+                json.optBoolean("playVideosAutomatically", current.playVideosAutomatically),
+            )
+            .putBoolean(LOOP_VIDEOS_KEY, json.optBoolean("loopVideos", current.loopVideos))
+            .putBoolean(
+                ANIMATE_GIF_THUMBNAILS_KEY,
+                json.optBoolean("animateGifThumbnails", current.animateGifThumbnails),
+            )
+            .putBoolean(
+                DELETE_EMPTY_FOLDERS_KEY,
+                json.optBoolean("deleteEmptyFolders", current.deleteEmptyFolders),
+            )
+            .putBoolean(
+                MOVE_DELETED_TO_RECYCLE_BIN_KEY,
+                json.optBoolean("moveDeletedItemsToRecycleBin", current.moveDeletedItemsToRecycleBin),
+            )
+            .putBoolean(
+                ROUNDED_SQUARE_THUMBNAILS_KEY,
+                json.optBoolean("roundedSquareThumbnails", current.roundedSquareThumbnails),
+            )
+            .apply()
+
+        reconfigureThumbnailExecutor(importedPriority)
+        thumbnailCache.evictAll()
+        Toast.makeText(this, "Gallery settings imported", Toast.LENGTH_SHORT).show()
+        renderSettingsDestinationOnly()
+    }
+
+    private fun stringSetJson(values: Set<String>): JSONArray = JSONArray().apply {
+        values.sorted().forEach { put(it) }
+    }
+
+    private fun jsonStringSet(array: JSONArray): Set<String> {
+        val values = linkedSetOf<String>()
+        for (index in 0 until array.length()) {
+            val value = array.optString(index).trim()
+            if (value.isNotBlank()) values.add(value)
+        }
+        return values
+    }
+
+    private fun galleryPreferences() = getSharedPreferences(LOCAL_STATE_PREFERENCES, MODE_PRIVATE)
 
     private fun viewerAction(
         label: String,
@@ -1191,6 +1783,7 @@ class GalleryActivity : Activity() {
     }
 
     private fun toggleSearch() {
+        if (destination == GalleryDestination.SETTINGS) return
         if (searchContainer.visibility == View.VISIBLE) {
             closeSearch()
         } else {
@@ -1286,19 +1879,23 @@ class GalleryActivity : Activity() {
             if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(cached)
             return
         }
-        thumbnailExecutor.execute {
-            val bitmap = try {
-                contentResolver.loadThumbnail(Uri.parse(item.contentUri), Size(dp(sizeDp), dp(sizeDp)), null)
-            } catch (_: SecurityException) {
-                null
-            } catch (_: RuntimeException) {
-                null
+        try {
+            thumbnailExecutor.execute {
+                val bitmap = try {
+                    contentResolver.loadThumbnail(Uri.parse(item.contentUri), Size(dp(sizeDp), dp(sizeDp)), null)
+                } catch (_: SecurityException) {
+                    null
+                } catch (_: RuntimeException) {
+                    null
+                }
+                if (bitmap == null) return@execute
+                thumbnailCache.put(cacheKey, bitmap)
+                runOnUiThread {
+                    if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(bitmap)
+                }
             }
-            if (bitmap == null) return@execute
-            thumbnailCache.put(cacheKey, bitmap)
-            runOnUiThread {
-                if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(bitmap)
-            }
+        } catch (_: RuntimeException) {
+            // Executor replacement can cancel queued thumbnail work; presentation remains safely empty until re-rendered.
         }
     }
 
@@ -1464,10 +2061,16 @@ class GalleryActivity : Activity() {
         PHOTOS,
         ALBUMS,
         VIDEOS,
+        SETTINGS,
     }
 
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
+        const val EXPORT_FAVORITES_REQUEST = 4201
+        const val IMPORT_FAVORITES_REQUEST = 4202
+        const val EXPORT_SETTINGS_REQUEST = 4203
+        const val IMPORT_SETTINGS_REQUEST = 4204
+
         const val GRID_GAP_DP = 3
         const val GRID_CORNER_DP = 8
         const val GRID_THUMBNAIL_DP = 192
@@ -1475,13 +2078,26 @@ class GalleryActivity : Activity() {
         const val ALBUM_CORNER_DP = 16
         const val ALBUM_THUMBNAIL_DP = 320
         const val VIEWER_THUMBNAIL_DP = 720
-        const val THUMBNAIL_WORKERS = 2
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
         const val GRID_THUMBNAIL_NAMESPACE = "grid"
         const val ALBUM_THUMBNAIL_NAMESPACE = "album"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
+
         const val LOCAL_STATE_PREFERENCES = "goreecloud_gallery_local_state"
         const val FAVORITES_KEY = "favorite_content_uris"
+        const val FILE_LOADING_PRIORITY_KEY = "file_loading_priority"
+        const val INCLUDED_ALBUM_IDS_KEY = "included_album_ids"
+        const val EXCLUDED_ALBUM_IDS_KEY = "excluded_album_ids"
+        const val SHOW_HIDDEN_ITEMS_KEY = "show_hidden_items"
+        const val PLAY_VIDEOS_AUTOMATICALLY_KEY = "play_videos_automatically"
+        const val LOOP_VIDEOS_KEY = "loop_videos"
+        const val ANIMATE_GIF_THUMBNAILS_KEY = "animate_gif_thumbnails"
+        const val DELETE_EMPTY_FOLDERS_KEY = "delete_empty_folders"
+        const val MOVE_DELETED_TO_RECYCLE_BIN_KEY = "move_deleted_items_to_recycle_bin"
+        const val ROUNDED_SQUARE_THUMBNAILS_KEY = "rounded_square_thumbnails"
+
+        const val FAVORITES_EXPORT_TYPE = "goreecloud-gallery-favorites"
+        const val SETTINGS_EXPORT_TYPE = "goreecloud-gallery-settings"
 
         val DATE_TIME_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a").withZone(ZoneId.systemDefault())
