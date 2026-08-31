@@ -34,9 +34,11 @@ The repository now contains GoreeCloud-owned native foundations under `native/`.
 
 `native/android-adapter` is a compiled Android library bridge over local `ContentResolver` / `MediaStore.Files`. It reads bounded image/video provider rows, fails rather than fabricating an empty library when no cursor is returned, rejects malformed rows, and maps accepted state into the native core model.
 
-The current native application-shell development line adds `native/app`, a first-party Android application target using package ID `com.goreecloud.gallery`. It requires Android media authorization before provider reads, consumes the MediaStore adapter directly, renders a bounded recent-media metadata list, and maps the current Glaze UI 2.0.0 source contract through native platform controls, a 48dp target floor, adaptive gutters, local light/dark presentation, and no network-delivered UI resources.
+The current native application-shell development line adds `native/app`, a first-party Android application target using package ID `com.goreecloud.gallery`. It requires Android media authorization before provider reads, consumes the MediaStore adapter directly, renders a bounded recent-media list with local thumbnails, supports All / Images / Videos filtering and Newest / Oldest sorting over the already-authorized in-memory snapshot, and provides bounded local preview navigation within that presented snapshot. Filter and sort actions do not issue another MediaStore listing request.
 
-These foundations do **not** yet constitute a released or Stable Gallery application. See [docs/native-mediastore-adapter.md](docs/native-mediastore-adapter.md) and [docs/native-android-app-shell.md](docs/native-android-app-shell.md).
+The native shell maps the current Glaze UI 2.0.0 source contract through platform controls, a 48dp target floor, adaptive gutters, local light/dark presentation, and no network-delivered UI resources.
+
+These foundations do **not** yet constitute a released or Stable Gallery application. Image previews remain bounded, video preview is poster-only, and full-resolution viewing, playback, editing, sharing, destructive-operation acceptance, and broader album UX remain separate milestones. See [docs/native-mediastore-adapter.md](docs/native-mediastore-adapter.md) and [docs/native-android-app-shell.md](docs/native-android-app-shell.md).
 
 ## Transitional reconstruction line
 
@@ -62,12 +64,17 @@ These are functional requirements, not decorative labels. Missing or unvalidated
 
 ## Stable-release work
 
-The native application still requires substantial work before Stable qualification, including mature local albums and thumbnail browsing, viewer behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, rendered accessibility and Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
+The native application still requires substantial work before Stable qualification, including mature local albums and thumbnail browsing, full viewer/playback behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, rendered accessibility and Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
 
 The old Fossify-based acceptance candidate is not a shortcut around those native acceptance gates.
 
 ## Repository guidance
 
+- [USER-MANUAL.md](USER-MANUAL.md) — current first-party native Development user guidance.
+- [SPECIFICATIONS.md](SPECIFICATIONS.md) — current native architecture, authority, and acceptance boundaries.
+- [FEATURES.md](FEATURES.md) — implemented Development capabilities and incomplete work.
+- [BENEFITS.md](BENEFITS.md) — current and intended product benefits without Stable overclaiming.
+- [COMPETITIVE-OBJECTIVES.md](COMPETITIVE-OBJECTIVES.md) — current first-party product objectives.
 - [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) — native replacement and transitional-source boundary.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — existing architecture/security context; portions describing the inherited application must be read as transitional until updated by native milestones.
 - [docs/PLATFORM_CONFORMANCE.md](docs/PLATFORM_CONFORMANCE.md) — platform conformance requirements.

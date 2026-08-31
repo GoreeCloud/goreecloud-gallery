@@ -22,8 +22,10 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.core.MediaItem
+import com.goreecloud.gallery.core.MediaSortOrder
 import com.goreecloud.gallery.core.MediaTypeFilter
 import com.goreecloud.gallery.core.filter
+import com.goreecloud.gallery.core.sort
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
@@ -33,6 +35,7 @@ class GalleryActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var action: Button
     private lateinit var filterRow: LinearLayout
+    private lateinit var sortRow: LinearLayout
     private lateinit var library: LinearLayout
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
@@ -41,6 +44,7 @@ class GalleryActivity : Activity() {
     private var loadGeneration = 0
     private var authorizedItems: List<MediaItem> = emptyList()
     private var selectedFilter = MediaTypeFilter.ALL
+    private var selectedSort = MediaSortOrder.NEWEST
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -127,7 +131,7 @@ class GalleryActivity : Activity() {
             setPadding(0, dp(26), 0, dp(4))
         })
         content.addView(TextView(this).apply {
-            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Filters operate only on this authorized snapshot; preview navigation stays within the filtered view."
+            text = "Newest authorized MediaStore rows and local thumbnails are shown without network access or cloud dependency. Type filters and sort controls operate only on this authorized snapshot; preview navigation stays within the presented view."
             setTextColor(secondaryTextColor)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(8))
@@ -139,6 +143,15 @@ class GalleryActivity : Activity() {
         }
         content.addView(filterRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         renderFilterControls()
+
+        sortRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.START
+        }
+        content.addView(sortRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(6)
+        })
+        renderSortControls()
 
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(library, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -178,6 +191,34 @@ class GalleryActivity : Activity() {
         }
     }
 
+    private fun renderSortControls() {
+        if (!::sortRow.isInitialized) return
+        sortRow.removeAllViews()
+        MediaSortOrder.entries.forEachIndexed { index, sortOrder ->
+            val selected = sortOrder == selectedSort
+            val button = Button(this).apply {
+                text = when (sortOrder) {
+                    MediaSortOrder.NEWEST -> "Newest first"
+                    MediaSortOrder.OLDEST -> "Oldest first"
+                }
+                isAllCaps = false
+                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                isEnabled = authorizedItems.isNotEmpty()
+                isActivated = selected
+                alpha = if (selected) 1f else 0.72f
+                contentDescription = "Sort the current authorized library ${text.toString().lowercase()}"
+                setOnClickListener {
+                    selectedSort = sortOrder
+                    renderSortControls()
+                    renderAuthorizedSnapshot(loadGeneration)
+                }
+            }
+            sortRow.addView(button, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (index > 0) marginStart = dp(6)
+            })
+        }
+    }
+
     private fun renderPermissionState() {
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
@@ -188,6 +229,7 @@ class GalleryActivity : Activity() {
             action.text = "Choose media access"
             action.setOnClickListener { requestReadableMediaAccess() }
             renderFilterControls()
+            renderSortControls()
             library.removeAllViews()
             library.addView(messageRow("No MediaStore query has been attempted."))
             return
@@ -224,6 +266,7 @@ class GalleryActivity : Activity() {
                         if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} malformed row(s) skipped")
                     }
                     renderFilterControls()
+                    renderSortControls()
                     renderAuthorizedSnapshot(generation)
                 }
             } catch (_: SecurityException) {
@@ -241,6 +284,7 @@ class GalleryActivity : Activity() {
             action.isEnabled = true
             status.text = message
             renderFilterControls()
+            renderSortControls()
             library.removeAllViews()
             library.addView(messageRow("No media list is shown because the authoritative provider read did not succeed."))
         }
@@ -248,9 +292,9 @@ class GalleryActivity : Activity() {
 
     private fun renderAuthorizedSnapshot(generation: Int) {
         if (generation != loadGeneration) return
-        val filteredItems = selectedFilter.filter(authorizedItems)
+        val presentedItems = selectedSort.sort(selectedFilter.filter(authorizedItems))
         library.removeAllViews()
-        if (filteredItems.isEmpty()) {
+        if (presentedItems.isEmpty()) {
             val label = when (selectedFilter) {
                 MediaTypeFilter.ALL -> "image or video"
                 MediaTypeFilter.IMAGES -> "image"
@@ -259,7 +303,7 @@ class GalleryActivity : Activity() {
             library.addView(messageRow("No authorized $label rows are present in the current snapshot."))
             return
         }
-        filteredItems.forEachIndexed { index, item -> library.addView(mediaRow(item, filteredItems, index, generation)) }
+        presentedItems.forEachIndexed { index, item -> library.addView(mediaRow(item, presentedItems, index, generation)) }
     }
 
     private fun mediaRow(item: MediaItem, items: List<MediaItem>, index: Int, generation: Int): LinearLayout {
