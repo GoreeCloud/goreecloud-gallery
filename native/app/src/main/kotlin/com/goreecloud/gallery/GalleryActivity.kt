@@ -30,6 +30,7 @@ import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
+import com.goreecloud.gallery.core.AuthorizedMediaSearch
 import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaSortOrder
 import com.goreecloud.gallery.core.buildAlbumCatalog
@@ -570,9 +571,10 @@ class GalleryActivity : Activity() {
         when (destination) {
             GalleryDestination.PHOTOS -> {
                 val items = selectedSort.sort(
-                    authorizedItems
-                        .filter { it.mimeType.startsWith("image/") }
-                        .filter(::matchesSearch),
+                    AuthorizedMediaSearch.search(
+                        authorizedItems.filter { it.mimeType.startsWith("image/") },
+                        searchQuery,
+                    ),
                 )
                 renderChronologicalLibrary(
                     items = items,
@@ -587,9 +589,10 @@ class GalleryActivity : Activity() {
             }
             GalleryDestination.VIDEOS -> {
                 val items = selectedSort.sort(
-                    authorizedItems
-                        .filter { it.mimeType.startsWith("video/") }
-                        .filter(::matchesSearch),
+                    AuthorizedMediaSearch.search(
+                        authorizedItems.filter { it.mimeType.startsWith("video/") },
+                        searchQuery,
+                    ),
                 )
                 renderChronologicalLibrary(
                     items = items,
@@ -605,9 +608,10 @@ class GalleryActivity : Activity() {
             GalleryDestination.ALBUMS -> when {
                 showingFavorites -> {
                     val items = selectedSort.sort(
-                        authorizedItems
-                            .filter { it.contentUri in favoriteUris }
-                            .filter(::matchesSearch),
+                        AuthorizedMediaSearch.search(
+                            authorizedItems.filter { it.contentUri in favoriteUris },
+                            searchQuery,
+                        ),
                     )
                     renderChronologicalLibrary(
                         items = items,
@@ -623,9 +627,10 @@ class GalleryActivity : Activity() {
                 openAlbumId != null -> {
                     val albumId = openAlbumId
                     val items = selectedSort.sort(
-                        authorizedItems
-                            .filter { it.albumId == albumId }
-                            .filter(::matchesSearch),
+                        AuthorizedMediaSearch.search(
+                            authorizedItems.filter { it.albumId == albumId },
+                            searchQuery,
+                        ),
                     )
                     renderChronologicalLibrary(
                         items = items,
@@ -666,19 +671,20 @@ class GalleryActivity : Activity() {
     }
 
     private fun renderAlbums(generation: Int) {
-        val query = searchQuery.lowercase()
-        val catalog = authorizedItems.buildAlbumCatalog()
+        val query = searchQuery.trim().lowercase()
+        val searchedItems = AuthorizedMediaSearch.search(authorizedItems, searchQuery)
+        val catalog = searchedItems.buildAlbumCatalog()
             .let { albums ->
                 if (selectedSort == MediaSortOrder.NEWEST) albums else albums.sortedBy { it.newestAt }
             }
-            .filter { query.isBlank() || it.displayName.lowercase().contains(query) }
 
-        val favoriteItems = authorizedItems
-            .filter { it.contentUri in favoriteUris }
-            .let(selectedSort::sort)
-
-        val showFavoritesTile = favoriteItems.isNotEmpty() &&
-            (query.isBlank() || "favorites".contains(query))
+        val allFavoriteItems = authorizedItems.filter { it.contentUri in favoriteUris }
+        val favoriteItems = if (query.isBlank() || "favorites".contains(query)) {
+            selectedSort.sort(allFavoriteItems)
+        } else {
+            selectedSort.sort(AuthorizedMediaSearch.search(allFavoriteItems, searchQuery))
+        }
+        val showFavoritesTile = favoriteItems.isNotEmpty()
 
         if (catalog.isEmpty() && !showFavoritesTile) {
             library.addView(
@@ -707,7 +713,7 @@ class GalleryActivity : Activity() {
             )
         }
         catalog.forEach { album ->
-            val cover = authorizedItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
+            val cover = searchedItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
             tiles += AlbumPresentation(
                 id = album.id,
                 name = album.displayName,
@@ -1194,13 +1200,6 @@ class GalleryActivity : Activity() {
             if (::searchField.isInitialized && searchField.text.isNotEmpty()) searchField.setText("")
             renderCurrentDestination()
         }
-    }
-
-    private fun matchesSearch(item: MediaItem): Boolean {
-        if (searchQuery.isBlank()) return true
-        val query = searchQuery.lowercase()
-        return item.displayName.lowercase().contains(query) ||
-            item.albumName?.lowercase()?.contains(query) == true
     }
 
     private fun sectionHeader(label: String): TextView = TextView(this).apply {
