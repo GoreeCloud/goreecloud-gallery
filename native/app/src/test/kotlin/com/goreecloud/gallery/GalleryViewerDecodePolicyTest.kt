@@ -29,9 +29,9 @@ class GalleryViewerDecodePolicyTest {
     }
 
     @Test
-    fun `portrait decode stays inside viewport`() {
+    fun `portrait decode stays inside phone viewport without upscaling`() {
         assertEquals(
-            GalleryViewerDecodeSize(width = 810, height = 1080),
+            GalleryViewerDecodeSize(width = 1080, height = 1440),
             GalleryViewerDecodePolicy.boundedDecodeSize(
                 sourceWidth = 3120,
                 sourceHeight = 4160,
