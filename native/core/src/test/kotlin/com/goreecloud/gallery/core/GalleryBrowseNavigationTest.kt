@@ -52,8 +52,12 @@ class GalleryBrowseNavigationTest {
         contentUri = "content://media/$id",
         displayName = "$id.jpg",
         mimeType = "image/jpeg",
-        modifiedAt = Instant.parse("2026-08-31T12:${minute.toString().padStart(2, '0')}:00Z"),
         capturedAt = null,
+        modifiedAt = Instant.parse("2026-08-31T12:${minute.toString().padStart(2, '0')}:00Z"),
+        width = 1920,
+        height = 1080,
+        durationMillis = null,
+        sizeBytes = 1024,
         albumId = albumId,
         albumName = albumName,
     )
