@@ -6,7 +6,7 @@ enum class MediaTypeFilter {
     VIDEOS,
 }
 
-fun MediaTypeFilter.apply(items: List<MediaItem>): List<MediaItem> = when (this) {
+fun MediaTypeFilter.filter(items: List<MediaItem>): List<MediaItem> = when (this) {
     MediaTypeFilter.ALL -> items
     MediaTypeFilter.IMAGES -> items.filter { it.kind == MediaKind.IMAGE }
     MediaTypeFilter.VIDEOS -> items.filter { it.kind == MediaKind.VIDEO }
