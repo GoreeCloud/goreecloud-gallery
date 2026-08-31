@@ -13,17 +13,17 @@ class MediaTypeFilterTest {
 
     @Test
     fun allPreservesAuthorizedSnapshotOrder() {
-        assertEquals(items, MediaTypeFilter.ALL.apply(items))
+        assertEquals(items, MediaTypeFilter.ALL.filter(items))
     }
 
     @Test
     fun imagesKeepsOnlyImagesWithoutReordering() {
-        assertEquals(listOf("image-1", "image-2"), MediaTypeFilter.IMAGES.apply(items).map { it.id })
+        assertEquals(listOf("image-1", "image-2"), MediaTypeFilter.IMAGES.filter(items).map { it.id })
     }
 
     @Test
     fun videosKeepsOnlyVideosWithoutReordering() {
-        assertEquals(listOf("video-1"), MediaTypeFilter.VIDEOS.apply(items).map { it.id })
+        assertEquals(listOf("video-1"), MediaTypeFilter.VIDEOS.filter(items).map { it.id })
     }
 
     private fun mediaItem(id: String, mimeType: String) = MediaItem(
