@@ -29,6 +29,7 @@ import com.goreecloud.gallery.core.filter
 import com.goreecloud.gallery.core.filterAuthorizedAlbum
 import com.goreecloud.gallery.core.mediaAlbumOptions
 import com.goreecloud.gallery.core.sort
+import com.goreecloud.gallery.core.summarizeAuthorizedMediaView
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
@@ -40,6 +41,8 @@ class GalleryActivity : Activity() {
     private lateinit var filterRow: LinearLayout
     private lateinit var sortRow: LinearLayout
     private lateinit var albumRow: LinearLayout
+    private lateinit var viewSummary: TextView
+    private lateinit var resetViewButton: Button
     private lateinit var library: LinearLayout
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
@@ -171,6 +174,36 @@ class GalleryActivity : Activity() {
         })
         renderAlbumControls()
 
+        val viewContext = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        viewSummary = TextView(this).apply {
+            setTextColor(secondaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        resetViewButton = Button(this).apply {
+            text = "Reset view"
+            isAllCaps = false
+            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+            contentDescription = "Reset Gallery type, album, and sort controls"
+            setOnClickListener {
+                selectedFilter = MediaTypeFilter.ALL
+                selectedSort = MediaSortOrder.NEWEST
+                selectedAlbumId = null
+                renderFilterControls()
+                renderSortControls()
+                renderAlbumControls()
+                renderAuthorizedSnapshot(loadGeneration)
+                announceForAccessibility("Gallery view reset to all albums, all media, newest first")
+            }
+        }
+        viewContext.addView(viewSummary, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) })
+        viewContext.addView(resetViewButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        content.addView(viewContext, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         library = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(library, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -274,6 +307,23 @@ class GalleryActivity : Activity() {
         }
     }
 
+    private fun renderViewSummary() {
+        if (!::viewSummary.isInitialized || !::resetViewButton.isInitialized) return
+        val summary = summarizeAuthorizedMediaView(authorizedItems, selectedFilter, selectedSort, selectedAlbumId)
+        val typeLabel = when (summary.mediaTypeFilter) {
+            MediaTypeFilter.ALL -> "All media"
+            MediaTypeFilter.IMAGES -> "Images"
+            MediaTypeFilter.VIDEOS -> "Videos"
+        }
+        val sortLabel = when (summary.sortOrder) {
+            MediaSortOrder.NEWEST -> "Newest first"
+            MediaSortOrder.OLDEST -> "Oldest first"
+        }
+        val albumLabel = summary.albumName ?: "All albums"
+        viewSummary.text = "${summary.presentedCount} of ${summary.authorizedCount} authorized · $albumLabel · $typeLabel · $sortLabel"
+        resetViewButton.isEnabled = authorizedItems.isNotEmpty() && summary.hasNonDefaultControls
+    }
+
     private fun renderPermissionState() {
         val accessScope = currentMediaAccessScope()
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
@@ -287,6 +337,7 @@ class GalleryActivity : Activity() {
             renderFilterControls()
             renderSortControls()
             renderAlbumControls()
+            renderViewSummary()
             library.removeAllViews()
             library.addView(messageRow("No MediaStore query has been attempted."))
             return
@@ -345,6 +396,7 @@ class GalleryActivity : Activity() {
             renderFilterControls()
             renderSortControls()
             renderAlbumControls()
+            renderViewSummary()
             library.removeAllViews()
             library.addView(messageRow("No media list is shown because the authoritative provider read did not succeed."))
         }
@@ -354,6 +406,7 @@ class GalleryActivity : Activity() {
         if (generation != loadGeneration) return
         val albumFilteredItems = filterAuthorizedAlbum(authorizedItems, selectedAlbumId)
         val presentedItems = selectedSort.sort(selectedFilter.filter(albumFilteredItems))
+        renderViewSummary()
         library.removeAllViews()
         if (presentedItems.isEmpty()) {
             val typeLabel = when (selectedFilter) {
