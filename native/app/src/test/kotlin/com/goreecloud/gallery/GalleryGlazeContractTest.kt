@@ -9,6 +9,7 @@ class GalleryGlazeContractTest {
     fun `native shell targets current stable Glaze contract and accessible target floor`() {
         assertEquals("2.1.0", GalleryGlazeContract.VERSION)
         assertTrue(GalleryGlazeContract.GENERAL_TARGET_DP >= 48)
+        assertTrue(GalleryGlazeContract.NAVIGATION_HEIGHT_DP >= GalleryGlazeContract.GENERAL_TARGET_DP)
     }
 
     @Test
@@ -26,6 +27,22 @@ class GalleryGlazeContractTest {
         assertEquals(6, GalleryGlazeContract.gridColumns(900))
         assertEquals(7, GalleryGlazeContract.gridColumns(1280))
         assertTrue(GalleryGlazeContract.MIN_GRID_TILE_DP >= 92)
+    }
+
+    @Test
+    fun `album grid stays more spacious than the media timeline`() {
+        assertEquals(2, GalleryGlazeContract.albumGridColumns(390))
+        assertEquals(3, GalleryGlazeContract.albumGridColumns(820))
+        assertEquals(4, GalleryGlazeContract.albumGridColumns(900))
+        assertEquals(5, GalleryGlazeContract.albumGridColumns(1280))
+        assertTrue(GalleryGlazeContract.MIN_ALBUM_TILE_DP > GalleryGlazeContract.MIN_GRID_TILE_DP)
+    }
+
+    @Test
+    fun `navigation capsule leaves protected content breathing room`() {
+        assertEquals(58, GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
+        assertEquals(28, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
+        assertTrue(GalleryGlazeContract.CONTENT_BOTTOM_INSET_DP > GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
     }
 
     @Test
