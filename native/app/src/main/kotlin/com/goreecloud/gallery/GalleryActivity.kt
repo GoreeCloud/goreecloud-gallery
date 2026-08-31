@@ -3,6 +3,7 @@ package com.goreecloud.gallery
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -12,63 +13,75 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.LruCache
 import android.util.Size
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
+import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaSortOrder
-import com.goreecloud.gallery.core.MediaTypeFilter
-import com.goreecloud.gallery.core.filter
-import com.goreecloud.gallery.core.filterAuthorizedAlbum
-import com.goreecloud.gallery.core.mediaAlbumOptions
+import com.goreecloud.gallery.core.buildAlbumCatalog
 import com.goreecloud.gallery.core.sort
-import com.goreecloud.gallery.core.summarizeAuthorizedMediaView
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 class GalleryActivity : Activity() {
+    private lateinit var rootFrame: FrameLayout
+    private lateinit var content: LinearLayout
+    private lateinit var headerTitle: TextView
+    private lateinit var headerSubtitle: TextView
+    private lateinit var backControl: TextView
+    private lateinit var searchControl: TextView
+    private lateinit var sortControl: TextView
+    private lateinit var searchContainer: LinearLayout
+    private lateinit var searchField: EditText
+    private lateinit var accessPanel: LinearLayout
     private lateinit var status: TextView
     private lateinit var action: TextView
-    private lateinit var controlsSection: LinearLayout
-    private lateinit var filterRow: LinearLayout
-    private lateinit var sortRow: LinearLayout
-    private lateinit var albumRow: LinearLayout
-    private lateinit var viewSummary: TextView
-    private lateinit var resetViewButton: TextView
     private lateinit var library: LinearLayout
+    private lateinit var navigationCapsule: LinearLayout
 
     private val thumbnailExecutor = Executors.newFixedThreadPool(THUMBNAIL_WORKERS)
     private val thumbnailCache = object : LruCache<String, Bitmap>(THUMBNAIL_CACHE_KIB) {
         override fun sizeOf(key: String, value: Bitmap): Int = maxOf(1, value.allocationByteCount / 1024)
     }
 
+    private val favoriteUris = linkedSetOf<String>()
     private var loadGeneration = 0
     private var authorizedItems: List<MediaItem> = emptyList()
-    private var selectedFilter = MediaTypeFilter.ALL
     private var selectedSort = MediaSortOrder.NEWEST
-    private var selectedAlbumId: String? = null
+    private var destination = GalleryDestination.PHOTOS
+    private var openAlbumId: String? = null
+    private var showingFavorites = false
+    private var searchQuery = ""
+    private var viewerOverlay: View? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        favoriteUris += getSharedPreferences(LOCAL_STATE_PREFERENCES, MODE_PRIVATE)
+            .getStringSet(FAVORITES_KEY, emptySet())
+            .orEmpty()
         buildSurface()
     }
 
     override fun onResume() {
         super.onResume()
-        renderPermissionState()
+        if (viewerOverlay == null) renderPermissionState()
     }
 
     override fun onDestroy() {
@@ -77,307 +90,366 @@ class GalleryActivity : Activity() {
         super.onDestroy()
     }
 
+    @Deprecated("Activity back navigation is intentionally handled for the native Development shell.")
+    override fun onBackPressed() {
+        if (viewerOverlay != null) {
+            closeAuthorizedViewer()
+            return
+        }
+        if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) {
+            openAlbumId = null
+            showingFavorites = false
+            renderCurrentDestination()
+            return
+        }
+        super.onBackPressed()
+    }
+
     private fun buildSurface() {
-        val canvas = themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt())
-        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
-        val accentColor = themeColor(android.R.attr.colorAccent, 0xff2e7d6f.toInt())
-        val gutter = dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp))
-
-        window.statusBarColor = canvas
-        window.navigationBarColor = canvas
-        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        @Suppress("DEPRECATION")
-        run {
-            var flags = 0
-            if (!night) {
-                flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    flags = flags or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-                }
-            }
-            window.decorView.systemUiVisibility = flags
+        rootFrame = FrameLayout(this).apply {
+            setBackgroundColor(canvasColor())
         }
 
-        val content = LinearLayout(this).apply {
+        content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(gutter, dp(18), gutter, dp(36))
-            setBackgroundColor(canvas)
-        }
-
-        content.addView(TextView(this).apply {
-            text = "Gallery"
-            setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 34f)
-            setTypeface(typeface, Typeface.BOLD)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        })
-        content.addView(TextView(this).apply {
-            text = "Photos and videos on this device"
-            setTextColor(secondaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setPadding(0, dp(4), 0, dp(18))
-        })
-
-        val accessPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(12), dp(10), dp(12))
-            background = roundedSurface(
-                withAlpha(themeColor(android.R.attr.colorControlHighlight, 0xff000000.toInt()), 0.08f),
-                20,
+            setPadding(
+                dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp)),
+                dp(12),
+                dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp)),
+                dp(GalleryGlazeContract.CONTENT_BOTTOM_INSET_DP),
             )
-        }
-        status = TextView(this).apply {
-            setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setLineSpacing(0f, 1.08f)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        }
-        action = TextView(this).apply {
-            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-            gravity = Gravity.CENTER
-            setPadding(dp(16), 0, dp(16), 0)
-            setTextColor(accentColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedSurface(withAlpha(accentColor, 0.14f), 16)
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Gallery media access action"
-        }
-        accessPanel.addView(
-            status,
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginEnd = dp(10)
-            },
-        )
-        accessPanel.addView(
-            action,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-        )
-        content.addView(
-            accessPanel,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-        )
-
-        controlsSection = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
+            setBackgroundColor(canvasColor())
         }
 
-        val libraryHeading = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(24), 0, dp(8))
-        }
-        libraryHeading.addView(TextView(this).apply {
-            text = "Library"
-            setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-            setTypeface(typeface, Typeface.BOLD)
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        resetViewButton = TextView(this).apply {
-            text = "Reset"
-            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-            gravity = Gravity.CENTER
-            setPadding(dp(14), 0, dp(14), 0)
-            setTextColor(accentColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            background = roundedSurface(withAlpha(accentColor, 0.10f), 16)
-            contentDescription = "Reset Gallery type, album, and sort controls"
-            setOnClickListener {
-                selectedFilter = MediaTypeFilter.ALL
-                selectedSort = MediaSortOrder.NEWEST
-                selectedAlbumId = null
-                renderFilterControls()
-                renderSortControls()
-                renderAlbumControls()
-                renderAuthorizedSnapshot(loadGeneration)
-                announceForAccessibility("Gallery view reset to all albums, all media, newest first")
-            }
-        }
-        libraryHeading.addView(resetViewButton)
-        controlsSection.addView(libraryHeading)
-
-        filterRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START
-        }
-        controlsSection.addView(
-            filterRow,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-        )
-
-        sortRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START
-        }
-        controlsSection.addView(
-            sortRow,
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(8)
-            },
-        )
-
-        albumRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START
-        }
-        controlsSection.addView(
-            HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-                contentDescription = "Authorized album filters"
-                addView(
-                    albumRow,
-                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
-                )
-            },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = dp(8)
-            },
-        )
-
-        viewSummary = TextView(this).apply {
-            setTextColor(secondaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding(0, dp(10), 0, dp(10))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        }
-        controlsSection.addView(viewSummary)
-        content.addView(controlsSection)
+        content.addView(buildHeader())
+        content.addView(buildSearchSurface())
+        content.addView(buildAccessPanel())
 
         library = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(16), 0, 0)
         }
         content.addView(
             library,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
         )
 
-        renderFilterControls()
-        renderSortControls()
-        renderAlbumControls()
-        renderViewSummary()
-
-        setContentView(ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
-            addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        })
+            addView(
+                content,
+                ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
+        }
+        rootFrame.addView(
+            scroll,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+
+        navigationCapsule = buildNavigationCapsule()
+        rootFrame.addView(
+            navigationCapsule,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(GalleryGlazeContract.NAVIGATION_HEIGHT_DP)).apply {
+                gravity = Gravity.BOTTOM
+                marginStart = dp(16)
+                marginEnd = dp(16)
+                bottomMargin = dp(18)
+            },
+        )
+
+        setContentView(rootFrame)
+        applySystemChrome()
+        renderNavigation()
+        updateHeader()
     }
 
-    private fun renderFilterControls() {
-        if (!::filterRow.isInitialized) return
-        filterRow.removeAllViews()
-        MediaTypeFilter.entries.forEachIndexed { index, filter ->
-            val label = when (filter) {
-                MediaTypeFilter.ALL -> "All"
-                MediaTypeFilter.IMAGES -> "Photos"
-                MediaTypeFilter.VIDEOS -> "Videos"
+    private fun buildHeader(): View {
+        val primaryTextColor = primaryTextColor()
+        val secondaryTextColor = secondaryTextColor()
+
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(2), 0, 0)
+        }
+
+        backControl = TextView(this).apply {
+            text = "‹"
+            gravity = Gravity.CENTER
+            minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+            setTextColor(primaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 36f)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Back to Albums"
+            visibility = View.GONE
+            setOnClickListener {
+                openAlbumId = null
+                showingFavorites = false
+                renderCurrentDestination()
             }
-            val button = chip(
-                label = label,
-                selected = filter == selectedFilter,
-                enabled = authorizedItems.isNotEmpty(),
-                description = "Show ${label.lowercase()} in the current authorized library",
-            ) {
-                selectedFilter = filter
-                renderFilterControls()
-                renderAuthorizedSnapshot(loadGeneration)
+        }
+        row.addView(backControl)
+
+        val titles = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        headerTitle = TextView(this).apply {
+            setTextColor(primaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+            setTypeface(typeface, Typeface.BOLD)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        headerSubtitle = TextView(this).apply {
+            setTextColor(secondaryTextColor)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(0, dp(1), 0, 0)
+        }
+        titles.addView(headerTitle)
+        titles.addView(headerSubtitle)
+        row.addView(
+            titles,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(2)
+            },
+        )
+
+        searchControl = quietHeaderAction("Search", "Search the current Gallery destination") {
+            toggleSearch()
+        }
+        row.addView(searchControl)
+
+        sortControl = quietHeaderAction("Newest", "Change Gallery sort order") {
+            selectedSort = if (selectedSort == MediaSortOrder.NEWEST) MediaSortOrder.OLDEST else MediaSortOrder.NEWEST
+            renderCurrentDestination()
+            announceForAccessibility(
+                if (selectedSort == MediaSortOrder.NEWEST) "Sorted newest first" else "Sorted oldest first",
+            )
+        }
+        row.addView(
+            sortControl,
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(6)
+            },
+        )
+
+        return row
+    }
+
+    private fun buildSearchSurface(): View {
+        searchContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.GONE
+            setPadding(dp(14), dp(4), dp(6), dp(4))
+            background = roundedSurface(
+                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.06f),
+                20,
+            )
+        }
+
+        searchField = EditText(this).apply {
+            hint = "Search photos, videos, and albums"
+            setSingleLine(true)
+            setTextColor(primaryTextColor())
+            setHintTextColor(withAlpha(secondaryTextColor(), 0.88f))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            background = null
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    searchQuery = s?.toString()?.trim().orEmpty()
+                    renderCurrentDestination()
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
+        }
+        searchContainer.addView(
+            searchField,
+            LinearLayout.LayoutParams(0, dp(GalleryGlazeContract.GENERAL_TARGET_DP), 1f),
+        )
+
+        searchContainer.addView(
+            TextView(this).apply {
+                text = "×"
+                gravity = Gravity.CENTER
+                minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                setTextColor(primaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Close search"
+                setOnClickListener { closeSearch() }
+            },
+        )
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(10), 0, 0)
+            addView(
+                searchContainer,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
+        }
+    }
+
+    private fun buildAccessPanel(): View {
+        accessPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = View.GONE
+            setPadding(dp(14), dp(10), dp(8), dp(10))
+            background = roundedSurface(
+                withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.055f),
+                18,
+            )
+        }
+
+        status = TextView(this).apply {
+            setTextColor(primaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setLineSpacing(0f, 1.08f)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        accessPanel.addView(
+            status,
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(8)
+            },
+        )
+
+        action = TextView(this).apply {
+            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+            gravity = Gravity.CENTER
+            setPadding(dp(14), 0, dp(14), 0)
+            setTextColor(accentColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedSurface(withAlpha(accentColor(), 0.14f), 16)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "Gallery media access action"
+        }
+        accessPanel.addView(action)
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(10), 0, 0)
+            addView(
+                accessPanel,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
+        }
+    }
+
+    private fun buildNavigationCapsule(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(5), dp(5), dp(5), dp(5))
+            background = roundedSurface(
+                if (isNightMode()) 0xf21d1d1f.toInt() else 0xf2ffffff.toInt(),
+                GalleryGlazeContract.NAVIGATION_RADIUS_DP,
+            )
+            elevation = dp(8).toFloat()
+        }
+    }
+
+    private fun renderNavigation() {
+        if (!::navigationCapsule.isInitialized) return
+        navigationCapsule.removeAllViews()
+        GalleryDestination.entries.forEachIndexed { index, item ->
+            val selected = destination == item
+            val label = when (item) {
+                GalleryDestination.PHOTOS -> "Photos"
+                GalleryDestination.ALBUMS -> "Albums"
+                GalleryDestination.VIDEOS -> "Videos"
             }
-            filterRow.addView(
-                button,
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (index > 0) marginStart = dp(8)
+            navigationCapsule.addView(
+                TextView(this).apply {
+                    text = label
+                    gravity = Gravity.CENTER
+                    minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                    setTextColor(if (selected) accentColor() else primaryTextColor())
+                    if (selected) setTypeface(typeface, Typeface.BOLD)
+                    background = roundedSurface(
+                        if (selected) withAlpha(accentColor(), 0.16f) else Color.TRANSPARENT,
+                        18,
+                    )
+                    isClickable = true
+                    isFocusable = true
+                    isSelected = selected
+                    contentDescription = "$label${if (selected) ", selected" else ""}"
+                    setOnClickListener {
+                        if (destination == item && openAlbumId == null && !showingFavorites) return@setOnClickListener
+                        destination = item
+                        openAlbumId = null
+                        showingFavorites = false
+                        searchQuery = ""
+                        if (::searchField.isInitialized) searchField.setText("")
+                        closeSearch(clearQuery = false)
+                        renderNavigation()
+                        renderCurrentDestination()
+                    }
+                },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (index > 0) marginStart = dp(4)
                 },
             )
         }
     }
 
-    private fun renderSortControls() {
-        if (!::sortRow.isInitialized) return
-        sortRow.removeAllViews()
-        MediaSortOrder.entries.forEachIndexed { index, sortOrder ->
-            val label = when (sortOrder) {
-                MediaSortOrder.NEWEST -> "Newest"
-                MediaSortOrder.OLDEST -> "Oldest"
+    private fun updateHeader() {
+        if (!::headerTitle.isInitialized) return
+
+        val collectionItems = when {
+            destination == GalleryDestination.ALBUMS && showingFavorites ->
+                authorizedItems.filter { it.contentUri in favoriteUris }
+            destination == GalleryDestination.ALBUMS && openAlbumId != null ->
+                authorizedItems.filter { it.albumId == openAlbumId }
+            else -> emptyList()
+        }
+
+        val title = when {
+            destination == GalleryDestination.ALBUMS && showingFavorites -> "Favorites"
+            destination == GalleryDestination.ALBUMS && openAlbumId != null ->
+                authorizedItems.firstOrNull { it.albumId == openAlbumId }?.albumName ?: "Album"
+            destination == GalleryDestination.PHOTOS -> "Photos"
+            destination == GalleryDestination.ALBUMS -> "Albums"
+            destination == GalleryDestination.VIDEOS -> "Videos"
+            else -> "Gallery"
+        }
+
+        val subtitle = when {
+            destination == GalleryDestination.ALBUMS && (showingFavorites || openAlbumId != null) ->
+                itemCountLabel(collectionItems.size)
+            destination == GalleryDestination.PHOTOS ->
+                itemCountLabel(authorizedItems.count { it.mimeType.startsWith("image/") })
+            destination == GalleryDestination.VIDEOS ->
+                itemCountLabel(authorizedItems.count { it.mimeType.startsWith("video/") })
+            destination == GalleryDestination.ALBUMS -> {
+                val albumCount = authorizedItems.buildAlbumCatalog().size
+                val favoriteSuffix = if (favoriteUris.any { uri -> authorizedItems.any { it.contentUri == uri } }) 1 else 0
+                val totalCollections = albumCount + favoriteSuffix
+                if (totalCollections == 1) "1 collection" else "$totalCollections collections"
             }
-            val button = chip(
-                label = label,
-                selected = sortOrder == selectedSort,
-                enabled = authorizedItems.isNotEmpty(),
-                description = "Sort the current authorized library ${label.lowercase()} first",
-            ) {
-                selectedSort = sortOrder
-                renderSortControls()
-                renderAuthorizedSnapshot(loadGeneration)
-            }
-            sortRow.addView(
-                button,
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    if (index > 0) marginStart = dp(8)
-                },
-            )
-        }
-    }
-
-    private fun renderAlbumControls() {
-        if (!::albumRow.isInitialized) return
-        val options = mediaAlbumOptions(authorizedItems)
-        if (selectedAlbumId != null && options.none { it.albumId == selectedAlbumId }) selectedAlbumId = null
-        albumRow.removeAllViews()
-
-        fun addAlbumChip(albumId: String?, label: String, index: Int) {
-            val button = chip(
-                label = label,
-                selected = albumId == selectedAlbumId,
-                enabled = authorizedItems.isNotEmpty(),
-                description = if (albumId == null) {
-                    "Show all albums in the current authorized library"
-                } else {
-                    "Show album $label in the current authorized library"
-                },
-            ) {
-                selectedAlbumId = albumId
-                renderAlbumControls()
-                renderAuthorizedSnapshot(loadGeneration)
-            }
-            albumRow.addView(
-                button,
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    if (index > 0) marginStart = dp(8)
-                },
-            )
+            else -> ""
         }
 
-        addAlbumChip(null, "All albums", 0)
-        options.forEachIndexed { index, option ->
-            addAlbumChip(option.albumId, "${option.albumName} · ${option.itemCount}", index + 1)
-        }
-    }
-
-    private fun renderViewSummary() {
-        if (!::viewSummary.isInitialized || !::resetViewButton.isInitialized) return
-        val summary = summarizeAuthorizedMediaView(authorizedItems, selectedFilter, selectedSort, selectedAlbumId)
-        val typeLabel = when (summary.mediaTypeFilter) {
-            MediaTypeFilter.ALL -> "All media"
-            MediaTypeFilter.IMAGES -> "Photos"
-            MediaTypeFilter.VIDEOS -> "Videos"
-        }
-        val sortLabel = when (summary.sortOrder) {
-            MediaSortOrder.NEWEST -> "Newest first"
-            MediaSortOrder.OLDEST -> "Oldest first"
-        }
-        val albumLabel = summary.albumName ?: "All albums"
-        viewSummary.text = buildString {
-            append("${summary.presentedCount}")
-            if (summary.presentedCount != summary.authorizedCount) append(" of ${summary.authorizedCount}")
-            append(" items · $albumLabel · $typeLabel · $sortLabel")
-        }
-        val canReset = authorizedItems.isNotEmpty() && summary.hasNonDefaultControls
-        resetViewButton.isEnabled = canReset
-        resetViewButton.alpha = if (canReset) 1f else 0.36f
+        headerTitle.text = title
+        headerSubtitle.text = subtitle
+        backControl.visibility =
+            if (destination == GalleryDestination.ALBUMS && (openAlbumId != null || showingFavorites)) View.VISIBLE
+            else View.GONE
+        sortControl.text = if (selectedSort == MediaSortOrder.NEWEST) "Newest" else "Oldest"
+        sortControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
+        searchControl.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun renderPermissionState() {
@@ -385,33 +457,34 @@ class GalleryActivity : Activity() {
         if (!GalleryMediaAccessPolicy.canRead(accessScope)) {
             loadGeneration += 1
             authorizedItems = emptyList()
-            selectedAlbumId = null
-            controlsSection.visibility = View.GONE
+            openAlbumId = null
+            showingFavorites = false
+            accessPanel.visibility = View.VISIBLE
             status.text = "Choose which photos and videos Gallery can see. Your local media stays on this device."
             action.isEnabled = true
             action.alpha = 1f
             action.text = "Choose media"
             action.setOnClickListener { requestReadableMediaAccess() }
-            renderFilterControls()
-            renderSortControls()
-            renderAlbumControls()
-            renderViewSummary()
             library.removeAllViews()
             library.addView(
                 messageRow(
                     title = "Your library is private by default",
-                    message = "Gallery will only read the media Android authorizes. No cloud account or network connection is required.",
+                    message = "Gallery only reads media Android authorizes. No GoreeCloud account or network connection is required.",
                 ),
             )
+            updateHeader()
             return
         }
 
         action.isEnabled = true
         action.alpha = 1f
         if (GalleryMediaAccessPolicy.isPartial(accessScope)) {
+            accessPanel.visibility = View.VISIBLE
+            status.text = "${accessScopeLabel(accessScope)}. Gallery only shows the media Android currently authorizes."
             action.text = "Change access"
             action.setOnClickListener { requestReadableMediaAccess() }
         } else {
+            accessPanel.visibility = View.GONE
             action.text = "Refresh"
             action.setOnClickListener { loadLocalLibrary(accessScope) }
         }
@@ -420,9 +493,9 @@ class GalleryActivity : Activity() {
 
     private fun loadLocalLibrary(accessScope: GalleryMediaAccessScope) {
         val generation = ++loadGeneration
+        accessPanel.visibility = View.VISIBLE
         action.isEnabled = false
         action.alpha = 0.45f
-        controlsSection.visibility = View.GONE
         status.text = "${accessScopeLabel(accessScope)} · Loading…"
         library.removeAllViews()
         library.addView(messageRow("Loading your library", "Reading the local media Android has authorized."))
@@ -435,17 +508,22 @@ class GalleryActivity : Activity() {
                     authorizedItems = result.items
                     action.isEnabled = true
                     action.alpha = 1f
-                    status.text = buildString {
-                        append(accessScopeLabel(accessScope))
-                        append(" · ${result.items.size} item")
-                        if (result.items.size != 1) append('s')
-                        if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} skipped")
+
+                    if (GalleryMediaAccessPolicy.isPartial(accessScope)) {
+                        accessPanel.visibility = View.VISIBLE
+                        status.text = buildString {
+                            append(accessScopeLabel(accessScope))
+                            append(" · ${result.items.size} item")
+                            if (result.items.size != 1) append('s')
+                            if (result.rejectedRowCount > 0) append(" · ${result.rejectedRowCount} skipped")
+                        }
+                        action.text = "Change access"
+                        action.setOnClickListener { requestReadableMediaAccess() }
+                    } else {
+                        accessPanel.visibility = View.GONE
                     }
-                    renderFilterControls()
-                    renderSortControls()
-                    renderAlbumControls()
-                    controlsSection.visibility = if (authorizedItems.isEmpty()) View.GONE else View.VISIBLE
-                    renderAuthorizedSnapshot(generation)
+
+                    renderCurrentDestination(generation)
                 }
             } catch (_: SecurityException) {
                 renderLoadFailure(generation, "Android denied the current local media read.")
@@ -459,8 +537,9 @@ class GalleryActivity : Activity() {
         runOnUiThread {
             if (generation != loadGeneration) return@runOnUiThread
             authorizedItems = emptyList()
-            selectedAlbumId = null
-            controlsSection.visibility = View.GONE
+            openAlbumId = null
+            showingFavorites = false
+            accessPanel.visibility = View.VISIBLE
             action.isEnabled = true
             action.alpha = 1f
             action.text = "Try again"
@@ -469,10 +548,6 @@ class GalleryActivity : Activity() {
                 if (GalleryMediaAccessPolicy.canRead(scope)) loadLocalLibrary(scope) else requestReadableMediaAccess()
             }
             status.text = message
-            renderFilterControls()
-            renderSortControls()
-            renderAlbumControls()
-            renderViewSummary()
             library.removeAllViews()
             library.addView(
                 messageRow(
@@ -480,36 +555,261 @@ class GalleryActivity : Activity() {
                     "Gallery is not treating a failed provider read as an empty library. Try again or review media access.",
                 ),
             )
+            updateHeader()
         }
     }
 
-    private fun renderAuthorizedSnapshot(generation: Int) {
+    private fun renderCurrentDestination(generation: Int = loadGeneration) {
         if (generation != loadGeneration) return
-        val albumFilteredItems = filterAuthorizedAlbum(authorizedItems, selectedAlbumId)
-        val presentedItems = selectedSort.sort(selectedFilter.filter(albumFilteredItems))
-        renderViewSummary()
+        if (!GalleryMediaAccessPolicy.canRead(currentMediaAccessScope())) return
+
+        updateHeader()
+        renderNavigation()
         library.removeAllViews()
 
-        if (presentedItems.isEmpty()) {
-            val typeLabel = when (selectedFilter) {
-                MediaTypeFilter.ALL -> "photos or videos"
-                MediaTypeFilter.IMAGES -> "photos"
-                MediaTypeFilter.VIDEOS -> "videos"
+        when (destination) {
+            GalleryDestination.PHOTOS -> {
+                val items = selectedSort.sort(
+                    authorizedItems
+                        .filter { it.mimeType.startsWith("image/") }
+                        .filter(::matchesSearch),
+                )
+                renderChronologicalLibrary(
+                    items = items,
+                    generation = generation,
+                    emptyTitle = if (searchQuery.isBlank()) "No photos yet" else "No photo results",
+                    emptyMessage = if (searchQuery.isBlank()) {
+                        "No authorized photos are available in this library."
+                    } else {
+                        "No authorized photos match “$searchQuery”."
+                    },
+                )
             }
-            val albumLabel = mediaAlbumOptions(authorizedItems).firstOrNull { it.albumId == selectedAlbumId }?.albumName
-            val message = if (albumLabel == null) {
-                "No authorized $typeLabel are present in this view."
-            } else {
-                "No authorized $typeLabel are present in $albumLabel."
+            GalleryDestination.VIDEOS -> {
+                val items = selectedSort.sort(
+                    authorizedItems
+                        .filter { it.mimeType.startsWith("video/") }
+                        .filter(::matchesSearch),
+                )
+                renderChronologicalLibrary(
+                    items = items,
+                    generation = generation,
+                    emptyTitle = if (searchQuery.isBlank()) "No videos yet" else "No video results",
+                    emptyMessage = if (searchQuery.isBlank()) {
+                        "No authorized videos are available in this library."
+                    } else {
+                        "No authorized videos match “$searchQuery”."
+                    },
+                )
             }
-            library.addView(messageRow("Nothing here", message))
+            GalleryDestination.ALBUMS -> when {
+                showingFavorites -> {
+                    val items = selectedSort.sort(
+                        authorizedItems
+                            .filter { it.contentUri in favoriteUris }
+                            .filter(::matchesSearch),
+                    )
+                    renderChronologicalLibrary(
+                        items = items,
+                        generation = generation,
+                        emptyTitle = if (searchQuery.isBlank()) "No favorites yet" else "No favorite results",
+                        emptyMessage = if (searchQuery.isBlank()) {
+                            "Mark a photo or video as a favorite from the viewer to keep it here."
+                        } else {
+                            "No authorized favorites match “$searchQuery”."
+                        },
+                    )
+                }
+                openAlbumId != null -> {
+                    val albumId = openAlbumId
+                    val items = selectedSort.sort(
+                        authorizedItems
+                            .filter { it.albumId == albumId }
+                            .filter(::matchesSearch),
+                    )
+                    renderChronologicalLibrary(
+                        items = items,
+                        generation = generation,
+                        emptyTitle = if (searchQuery.isBlank()) "Album is empty" else "No album results",
+                        emptyMessage = if (searchQuery.isBlank()) {
+                            "No authorized media is currently available in this album."
+                        } else {
+                            "No authorized items in this album match “$searchQuery”."
+                        },
+                    )
+                }
+                else -> renderAlbums(generation)
+            }
+        }
+    }
+
+    private fun renderChronologicalLibrary(
+        items: List<MediaItem>,
+        generation: Int,
+        emptyTitle: String,
+        emptyMessage: String,
+    ) {
+        if (items.isEmpty()) {
+            library.addView(messageRow(emptyTitle, emptyMessage))
             return
         }
 
-        renderMediaGrid(presentedItems, generation)
+        val groups = linkedMapOf<String, MutableList<MediaItem>>()
+        items.forEach { item ->
+            groups.getOrPut(dateGroupLabel(item)) { mutableListOf() }.add(item)
+        }
+
+        groups.forEach { (label, groupItems) ->
+            library.addView(sectionHeader(label))
+            renderMediaGrid(groupItems, generation, library)
+        }
     }
 
-    private fun renderMediaGrid(items: List<MediaItem>, generation: Int) {
+    private fun renderAlbums(generation: Int) {
+        val query = searchQuery.lowercase()
+        val catalog = authorizedItems.buildAlbumCatalog()
+            .let { albums ->
+                if (selectedSort == MediaSortOrder.NEWEST) albums else albums.sortedBy { it.newestAt }
+            }
+            .filter { query.isBlank() || it.displayName.lowercase().contains(query) }
+
+        val favoriteItems = authorizedItems
+            .filter { it.contentUri in favoriteUris }
+            .let(selectedSort::sort)
+
+        val showFavoritesTile = favoriteItems.isNotEmpty() &&
+            (query.isBlank() || "favorites".contains(query))
+
+        if (catalog.isEmpty() && !showFavoritesTile) {
+            library.addView(
+                messageRow(
+                    if (searchQuery.isBlank()) "No albums yet" else "No album results",
+                    if (searchQuery.isBlank()) {
+                        "Gallery could not derive any authorized local albums from Android media metadata."
+                    } else {
+                        "No authorized albums match “$searchQuery”."
+                    },
+                ),
+            )
+            return
+        }
+
+        library.addView(sectionHeader("Collections"))
+
+        val tiles = mutableListOf<AlbumPresentation>()
+        if (showFavoritesTile) {
+            tiles += AlbumPresentation(
+                id = null,
+                name = "Favorites",
+                count = favoriteItems.size,
+                cover = favoriteItems.first(),
+                isFavorites = true,
+            )
+        }
+        catalog.forEach { album ->
+            val cover = authorizedItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
+            tiles += AlbumPresentation(
+                id = album.id,
+                name = album.displayName,
+                count = album.itemCount,
+                cover = cover,
+                isFavorites = false,
+            )
+        }
+
+        renderAlbumGrid(tiles, generation)
+    }
+
+    private fun renderAlbumGrid(albums: List<AlbumPresentation>, generation: Int) {
+        val columns = GalleryGlazeContract.albumGridColumns(resources.configuration.screenWidthDp)
+        val gutterPx = dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp))
+        val gaps = dp(ALBUM_GAP_DP) * (columns - 1)
+        val tileWidth = (
+            (resources.displayMetrics.widthPixels - (gutterPx * 2) - gaps) / columns
+        ).coerceAtLeast(dp(GalleryGlazeContract.MIN_ALBUM_TILE_DP))
+
+        albums.chunked(columns).forEachIndexed { rowIndex, rowAlbums ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.START
+            }
+
+            rowAlbums.forEachIndexed { columnIndex, album ->
+                row.addView(
+                    albumTile(album, generation, tileWidth),
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        if (columnIndex > 0) marginStart = dp(ALBUM_GAP_DP)
+                    },
+                )
+            }
+            repeat(columns - rowAlbums.size) { spacerIndex ->
+                row.addView(
+                    Space(this),
+                    LinearLayout.LayoutParams(0, 1, 1f).apply {
+                        if (rowAlbums.isNotEmpty() || spacerIndex > 0) marginStart = dp(ALBUM_GAP_DP)
+                    },
+                )
+            }
+            library.addView(
+                row,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (rowIndex > 0) topMargin = dp(18)
+                },
+            )
+        }
+    }
+
+    private fun albumTile(album: AlbumPresentation, generation: Int, tileWidth: Int): LinearLayout {
+        val image = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = roundedSurface(withAlpha(primaryTextColor(), 0.08f), ALBUM_CORNER_DP)
+            clipToOutline = true
+            tag = thumbnailCacheKey(ALBUM_THUMBNAIL_NAMESPACE, album.cover.contentUri)
+        }
+        loadLocalThumbnail(album.cover, image, generation, ALBUM_THUMBNAIL_DP, ALBUM_THUMBNAIL_NAMESPACE)
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            isClickable = true
+            isFocusable = true
+            contentDescription = "${album.name}, ${itemCountLabel(album.count)}"
+            setOnClickListener {
+                searchQuery = ""
+                searchField.setText("")
+                closeSearch(clearQuery = false)
+                if (album.isFavorites) {
+                    showingFavorites = true
+                    openAlbumId = null
+                } else {
+                    showingFavorites = false
+                    openAlbumId = album.id
+                }
+                renderCurrentDestination()
+            }
+            addView(
+                image,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tileWidth),
+            )
+            addView(TextView(context).apply {
+                text = album.name
+                setTextColor(primaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                setTypeface(typeface, Typeface.BOLD)
+                maxLines = 1
+                setPadding(dp(2), dp(8), dp(2), 0)
+            })
+            addView(TextView(context).apply {
+                text = itemCountLabel(album.count)
+                setTextColor(secondaryTextColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                maxLines = 1
+                setPadding(dp(2), dp(2), dp(2), 0)
+            })
+        }
+    }
+
+    private fun renderMediaGrid(items: List<MediaItem>, generation: Int, parent: LinearLayout) {
         val columns = GalleryGlazeContract.gridColumns(resources.configuration.screenWidthDp)
         val gutterPx = dp(GalleryGlazeContract.horizontalGutterDp(resources.configuration.screenWidthDp))
         val gaps = dp(GRID_GAP_DP) * (columns - 1)
@@ -539,7 +839,7 @@ class GalleryActivity : Activity() {
                     },
                 )
             }
-            library.addView(
+            parent.addView(
                 row,
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tileSize).apply {
                     if (rowIndex > 0) topMargin = dp(GRID_GAP_DP)
@@ -554,7 +854,7 @@ class GalleryActivity : Activity() {
         index: Int,
         generation: Int,
     ): FrameLayout {
-        val placeholder = withAlpha(themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt()), 0.08f)
+        val placeholder = withAlpha(primaryTextColor(), 0.08f)
         val cacheKey = thumbnailCacheKey(GRID_THUMBNAIL_NAMESPACE, item.contentUri)
         val thumbnail = ImageView(this).apply {
             tag = cacheKey
@@ -570,8 +870,8 @@ class GalleryActivity : Activity() {
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
             isClickable = true
             isFocusable = true
-            contentDescription = "${item.displayName}. ${mediaMetadata(item)}. Double tap to open preview."
-            setOnClickListener { showAuthorizedPreview(items, index, generation) }
+            contentDescription = "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer."
+            setOnClickListener { showAuthorizedViewer(items, index, generation) }
             addView(
                 thumbnail,
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
@@ -579,150 +879,346 @@ class GalleryActivity : Activity() {
             if (item.mimeType.startsWith("video/")) {
                 addView(
                     TextView(context).apply {
-                        text = "VIDEO"
+                        text = formatVideoBadge(item)
                         setTextColor(Color.WHITE)
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                         setTypeface(typeface, Typeface.BOLD)
                         gravity = Gravity.CENTER
-                        setPadding(dp(8), dp(4), dp(8), dp(4))
-                        background = roundedSurface(0xb3000000.toInt(), 10)
+                        setPadding(dp(7), dp(3), dp(7), dp(3))
+                        background = roundedSurface(0xb3000000.toInt(), 9)
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         gravity = Gravity.END or Gravity.BOTTOM
-                        marginEnd = dp(8)
-                        bottomMargin = dp(8)
+                        marginEnd = dp(6)
+                        bottomMargin = dp(6)
                     },
                 )
             }
         }
     }
 
-    private fun showAuthorizedPreview(items: List<MediaItem>, initialIndex: Int, generation: Int) {
+    private fun showAuthorizedViewer(items: List<MediaItem>, initialIndex: Int, generation: Int) {
         if (
             generation != loadGeneration ||
             !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
             initialIndex !in items.indices
         ) return
 
-        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
+        viewerOverlay?.let { rootFrame.removeView(it) }
+
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        viewerOverlay = overlay
+        rootFrame.addView(
+            overlay,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.BLACK
+        @Suppress("DEPRECATION")
+        run { window.decorView.systemUiVisibility = 0 }
+
         val preview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-            minimumHeight = dp(VIEWER_PREVIEW_DP)
-            background = roundedSurface(
-                withAlpha(themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt()), 0.06f),
-                18,
+            setBackgroundColor(Color.BLACK)
+        }
+        overlay.addView(
+            preview,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                topMargin = dp(72)
+                bottomMargin = dp(104)
+            },
+        )
+
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedSurface(0xd9141416.toInt(), 22)
+        }
+        val viewerBack = viewerAction("‹", true, "Close viewer") { closeAuthorizedViewer() }.apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+        }
+        topBar.addView(
+            viewerBack,
+            LinearLayout.LayoutParams(dp(GalleryGlazeContract.GENERAL_TARGET_DP), dp(GalleryGlazeContract.GENERAL_TARGET_DP)),
+        )
+        val viewerTitle = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTypeface(typeface, Typeface.BOLD)
+            maxLines = 1
+        }
+        val viewerSubtitle = TextView(this).apply {
+            setTextColor(0xffc8c8cc.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            maxLines = 1
+        }
+        val viewerTitles = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), 0, dp(6), 0)
+            addView(viewerTitle)
+            addView(viewerSubtitle)
+        }
+        topBar.addView(viewerTitles, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        overlay.addView(
+            topBar,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)).apply {
+                gravity = Gravity.TOP
+                marginStart = dp(10)
+                marginEnd = dp(10)
+                topMargin = dp(6)
+            },
+        )
+
+        val previous = viewerAction("‹", true, "Previous media") {}
+        val next = viewerAction("›", true, "Next media") {}
+        overlay.addView(
+            previous,
+            FrameLayout.LayoutParams(dp(52), dp(64)).apply {
+                gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                marginStart = dp(10)
+            },
+        )
+        overlay.addView(
+            next,
+            FrameLayout.LayoutParams(dp(52), dp(64)).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                marginEnd = dp(10)
+            },
+        )
+
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            background = roundedSurface(0xe8141416.toInt(), 24)
+        }
+
+        val share = viewerAction("Share", true, "Share this media") {}
+        val favorite = viewerAction("Favorite", true, "Favorite this media") {}
+        val edit = viewerAction("Edit", false, "Edit is unavailable in this Development build") {}
+        val delete = viewerAction("Delete", false, "Delete is unavailable in this Development build") {}
+        val more = viewerAction("More", true, "Show media details") {}
+
+        listOf(share, favorite, edit, delete, more).forEachIndexed { index, item ->
+            bottomBar.addView(
+                item,
+                LinearLayout.LayoutParams(0, dp(60), 1f).apply {
+                    if (index > 0) marginStart = dp(3)
+                },
             )
         }
-        val metadata = TextView(this).apply {
-            setTextColor(primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setPadding(0, dp(12), 0, 0)
-        }
-        val note = TextView(this).apply {
-            setTextColor(secondaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding(0, dp(8), 0, 0)
-        }
-        val body = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(8), dp(20), dp(4))
-            addView(preview, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(VIEWER_PREVIEW_DP)))
-            addView(metadata)
-            addView(note)
-        }
+        overlay.addView(
+            bottomBar,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)).apply {
+                gravity = Gravity.BOTTOM
+                marginStart = dp(10)
+                marginEnd = dp(10)
+                bottomMargin = dp(16)
+            },
+        )
 
         var currentIndex = initialIndex
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(items[currentIndex].displayName)
-            .setView(body)
-            .setNeutralButton("Previous", null)
-            .setPositiveButton("Next", null)
-            .setNegativeButton("Close", null)
-            .create()
 
-        dialog.setOnShowListener {
-            val previousButton = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
-            val nextButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            val closeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-            listOf(previousButton, nextButton, closeButton).forEach { button ->
-                button?.apply {
-                    minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-                    setTextColor(primaryTextColor)
-                }
+        fun renderCurrentItem() {
+            if (
+                generation != loadGeneration ||
+                !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
+                currentIndex !in items.indices
+            ) {
+                closeAuthorizedViewer()
+                return
             }
+            val item = items[currentIndex]
+            val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
+            preview.setImageDrawable(null)
+            preview.tag = viewerCacheKey
+            preview.contentDescription = "Viewer for ${item.displayName}"
+            viewerTitle.text = item.displayName
+            viewerSubtitle.text = mediaMetadata(item)
+            previous.isEnabled = currentIndex > 0
+            previous.alpha = if (previous.isEnabled) 1f else 0.30f
+            next.isEnabled = currentIndex < items.lastIndex
+            next.alpha = if (next.isEnabled) 1f else 0.30f
+            val isFavorite = item.contentUri in favoriteUris
+            favorite.text = if (isFavorite) "♥ Saved" else "♡ Favorite"
+            favorite.contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+            loadLocalThumbnail(item, preview, generation, VIEWER_THUMBNAIL_DP, VIEWER_THUMBNAIL_NAMESPACE)
+        }
 
-            fun renderCurrentItem() {
-                if (
-                    generation != loadGeneration ||
-                    !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
-                    currentIndex !in items.indices
-                ) {
-                    dialog.dismiss()
-                    return
-                }
-                val item = items[currentIndex]
-                val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
-                dialog.setTitle(item.displayName)
-                preview.setImageDrawable(null)
-                preview.tag = viewerCacheKey
-                preview.contentDescription = "Local preview for ${item.displayName}"
-                metadata.text = mediaMetadata(item)
-                note.text = if (item.mimeType.startsWith("video/")) {
-                    "Video poster preview only. Playback remains a separate Development milestone."
-                } else {
-                    "Local preview from the authorized item. Full-resolution editing remains a separate Development milestone."
-                }
-                previousButton?.isEnabled = currentIndex > 0
-                nextButton?.isEnabled = currentIndex < items.lastIndex
-                loadLocalThumbnail(item, preview, generation, VIEWER_PREVIEW_DP, VIEWER_THUMBNAIL_NAMESPACE)
+        previous.setOnClickListener {
+            if (currentIndex > 0) {
+                currentIndex -= 1
+                renderCurrentItem()
             }
-
-            previousButton?.setOnClickListener {
-                if (currentIndex > 0) {
-                    currentIndex -= 1
-                    renderCurrentItem()
-                }
+        }
+        next.setOnClickListener {
+            if (currentIndex < items.lastIndex) {
+                currentIndex += 1
+                renderCurrentItem()
             }
-            nextButton?.setOnClickListener {
-                if (currentIndex < items.lastIndex) {
-                    currentIndex += 1
-                    renderCurrentItem()
-                }
-            }
+        }
+        share.setOnClickListener {
+            val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
+            shareAuthorizedItem(item)
+        }
+        favorite.setOnClickListener {
+            val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
+            toggleFavorite(item)
             renderCurrentItem()
         }
-        dialog.show()
+        more.setOnClickListener {
+            val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
+            showItemDetails(item)
+        }
+
+        renderCurrentItem()
     }
 
-    private fun chip(
+    private fun closeAuthorizedViewer() {
+        val overlay = viewerOverlay ?: return
+        rootFrame.removeView(overlay)
+        viewerOverlay = null
+        applySystemChrome()
+        renderCurrentDestination()
+    }
+
+    private fun shareAuthorizedItem(item: MediaItem) {
+        val uri = Uri.parse(item.contentUri)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = item.mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(Intent.createChooser(shareIntent, "Share with"))
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "No compatible share destination is available.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun toggleFavorite(item: MediaItem) {
+        if (item.contentUri in favoriteUris) {
+            favoriteUris.remove(item.contentUri)
+            Toast.makeText(this, "Removed from Favorites", Toast.LENGTH_SHORT).show()
+        } else {
+            favoriteUris.add(item.contentUri)
+            Toast.makeText(this, "Added to Favorites", Toast.LENGTH_SHORT).show()
+        }
+        getSharedPreferences(LOCAL_STATE_PREFERENCES, MODE_PRIVATE)
+            .edit()
+            .putStringSet(FAVORITES_KEY, favoriteUris.toSet())
+            .apply()
+        updateHeader()
+    }
+
+    private fun showItemDetails(item: MediaItem) {
+        val dimensions = if (item.width != null && item.height != null) "${item.width} × ${item.height}" else "Unknown"
+        val duration = item.durationMillis?.let(::formatDuration) ?: "Not applicable"
+        AlertDialog.Builder(this)
+            .setTitle(item.displayName)
+            .setMessage(
+                listOf(
+                    "Type: ${if (item.mimeType.startsWith("video/")) "Video" else "Photo"}",
+                    "Album: ${item.albumName ?: "Not grouped"}",
+                    "Date: ${DATE_TIME_FORMAT.format(item.capturedAt ?: item.modifiedAt)}",
+                    "Dimensions: $dimensions",
+                    "Duration: $duration",
+                    "Size: ${formatBytes(item.sizeBytes)}",
+                ).joinToString("\n"),
+            )
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun viewerAction(
         label: String,
-        selected: Boolean,
         enabled: Boolean,
         description: String,
         onClick: () -> Unit,
-    ): TextView {
-        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val accentColor = themeColor(android.R.attr.colorAccent, 0xff2e7d6f.toInt())
-        val neutral = withAlpha(primaryTextColor, 0.06f)
-        val selectedSurface = withAlpha(accentColor, 0.16f)
-        return TextView(this).apply {
-            text = label
-            minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-            gravity = Gravity.CENTER
-            setPadding(dp(14), 0, dp(14), 0)
-            setTextColor(if (selected) accentColor else primaryTextColor)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            if (selected) setTypeface(typeface, Typeface.BOLD)
-            background = roundedSurface(if (selected) selectedSurface else neutral, 16)
-            isEnabled = enabled
-            isClickable = enabled
-            isFocusable = enabled
-            alpha = if (enabled) 1f else 0.38f
-            contentDescription = description
-            setOnClickListener { onClick() }
+    ): TextView = TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        setTypeface(typeface, Typeface.BOLD)
+        background = roundedSurface(0x26ffffff, 18)
+        isEnabled = enabled
+        isClickable = enabled
+        isFocusable = enabled
+        alpha = if (enabled) 1f else 0.35f
+        contentDescription = description
+        if (enabled) setOnClickListener { onClick() }
+    }
+
+    private fun quietHeaderAction(
+        label: String,
+        description: String,
+        onClick: () -> Unit,
+    ): TextView = TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        setPadding(dp(10), 0, dp(10), 0)
+        setTextColor(primaryTextColor())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.12f else 0.055f), 16)
+        isClickable = true
+        isFocusable = true
+        contentDescription = description
+        setOnClickListener { onClick() }
+    }
+
+    private fun toggleSearch() {
+        if (searchContainer.visibility == View.VISIBLE) {
+            closeSearch()
+        } else {
+            searchContainer.visibility = View.VISIBLE
+            searchField.requestFocus()
+            searchControl.text = "Close"
+        }
+    }
+
+    private fun closeSearch(clearQuery: Boolean = true) {
+        if (!::searchContainer.isInitialized) return
+        searchContainer.visibility = View.GONE
+        searchControl.text = "Search"
+        if (clearQuery) {
+            searchQuery = ""
+            if (::searchField.isInitialized && searchField.text.isNotEmpty()) searchField.setText("")
+            renderCurrentDestination()
+        }
+    }
+
+    private fun matchesSearch(item: MediaItem): Boolean {
+        if (searchQuery.isBlank()) return true
+        val query = searchQuery.lowercase()
+        return item.displayName.lowercase().contains(query) ||
+            item.albumName?.lowercase()?.contains(query) == true
+    }
+
+    private fun sectionHeader(label: String): TextView = TextView(this).apply {
+        text = label
+        setTextColor(primaryTextColor())
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        setTypeface(typeface, Typeface.BOLD)
+        setPadding(dp(2), dp(18), 0, dp(8))
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+    }
+
+    private fun dateGroupLabel(item: MediaItem): String {
+        val date = (item.capturedAt ?: item.modifiedAt).atZone(ZoneId.systemDefault()).toLocalDate()
+        val today = LocalDate.now()
+        return when (date) {
+            today -> "Today"
+            today.minusDays(1) -> "Yesterday"
+            else -> DATE_HEADER_FORMAT.format(date)
         }
     }
 
@@ -736,6 +1232,19 @@ class GalleryActivity : Activity() {
             formatBytes(item.sizeBytes),
         ).joinToString(" · ")
     }
+
+    private fun formatVideoBadge(item: MediaItem): String =
+        item.durationMillis?.let(::formatDuration) ?: "VIDEO"
+
+    private fun formatDuration(milliseconds: Long): String {
+        val seconds = milliseconds / 1000
+        val minutes = seconds / 60
+        val remainder = seconds % 60
+        return "$minutes:${remainder.toString().padStart(2, '0')}"
+    }
+
+    private fun itemCountLabel(count: Int): String =
+        if (count == 1) "1 item" else "$count items"
 
     private fun loadLocalThumbnail(
         item: MediaItem,
@@ -768,25 +1277,22 @@ class GalleryActivity : Activity() {
     private fun thumbnailCacheKey(namespace: String, contentUri: String): String = "$namespace:$contentUri"
 
     private fun messageRow(title: String, message: String): LinearLayout {
-        val primaryTextColor = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
-        val secondaryTextColor = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
-        val surface = withAlpha(primaryTextColor, 0.05f)
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(20), dp(28), dp(20), dp(28))
-            background = roundedSurface(surface, 22)
+            setPadding(dp(20), dp(30), dp(20), dp(30))
+            background = roundedSurface(withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f), 22)
             addView(TextView(context).apply {
                 text = title
                 gravity = Gravity.CENTER
-                setTextColor(primaryTextColor)
+                setTextColor(primaryTextColor())
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
                 setTypeface(typeface, Typeface.BOLD)
             })
             addView(TextView(context).apply {
                 text = message
                 gravity = Gravity.CENTER
-                setTextColor(secondaryTextColor)
+                setTextColor(secondaryTextColor())
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setLineSpacing(0f, 1.10f)
                 setPadding(0, dp(8), 0, 0)
@@ -795,7 +1301,7 @@ class GalleryActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply {
-                topMargin = dp(20)
+                topMargin = dp(12)
             }
         }
     }
@@ -837,6 +1343,34 @@ class GalleryActivity : Activity() {
         requestPermissions(permissions, MEDIA_PERMISSION_REQUEST)
     }
 
+    private fun applySystemChrome() {
+        val canvas = canvasColor()
+        window.statusBarColor = canvas
+        window.navigationBarColor = canvas
+        @Suppress("DEPRECATION")
+        run {
+            var flags = 0
+            if (!isNightMode()) {
+                flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                }
+            }
+            window.decorView.systemUiVisibility = flags
+        }
+    }
+
+    private fun isNightMode(): Boolean =
+        resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+
+    private fun canvasColor(): Int = themeColor(android.R.attr.colorBackground, 0xfffafafa.toInt())
+
+    private fun primaryTextColor(): Int = themeColor(android.R.attr.textColorPrimary, 0xff1d1d1f.toInt())
+
+    private fun secondaryTextColor(): Int = themeColor(android.R.attr.textColorSecondary, 0xff666666.toInt())
+
+    private fun accentColor(): Int = themeColor(android.R.attr.colorAccent, 0xff2e7d6f.toInt())
+
     private fun roundedSurface(color: Int, radiusDp: Int): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         setColor(color)
@@ -861,19 +1395,40 @@ class GalleryActivity : Activity() {
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
+    private data class AlbumPresentation(
+        val id: String?,
+        val name: String,
+        val count: Int,
+        val cover: MediaItem,
+        val isFavorites: Boolean,
+    )
+
+    private enum class GalleryDestination {
+        PHOTOS,
+        ALBUMS,
+        VIDEOS,
+    }
+
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
         const val GRID_GAP_DP = 3
-        const val GRID_CORNER_DP = 12
+        const val GRID_CORNER_DP = 10
         const val GRID_THUMBNAIL_DP = 192
-        const val VIEWER_PREVIEW_DP = 320
+        const val ALBUM_GAP_DP = 12
+        const val ALBUM_CORNER_DP = 18
+        const val ALBUM_THUMBNAIL_DP = 320
+        const val VIEWER_THUMBNAIL_DP = 720
         const val THUMBNAIL_WORKERS = 2
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
         const val GRID_THUMBNAIL_NAMESPACE = "grid"
+        const val ALBUM_THUMBNAIL_NAMESPACE = "album"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
+        const val LOCAL_STATE_PREFERENCES = "goreecloud_gallery_local_state"
+        const val FAVORITES_KEY = "favorite_content_uris"
 
         val DATE_TIME_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a").withZone(ZoneId.systemDefault())
+        val DATE_HEADER_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 
         fun formatBytes(bytes: Long): String = when {
             bytes >= 1024L * 1024L -> String.format("%.1f MiB", bytes / (1024.0 * 1024.0))
