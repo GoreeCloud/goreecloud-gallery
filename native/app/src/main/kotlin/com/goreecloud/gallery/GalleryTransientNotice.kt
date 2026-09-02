@@ -27,7 +27,7 @@ class GalleryTransientNoticeHost(
     private val dismissRunnable = Runnable { dismiss() }
 
     fun show(message: String) {
-        val normalized = message.trim()
+        val normalized = GalleryTransientNoticePolicy.normalize(message)
         if (normalized.isEmpty()) return
 
         dismiss()
@@ -69,7 +69,7 @@ class GalleryTransientNoticeHost(
             },
         )
         notice.announceForAccessibility(normalized)
-        notice.postDelayed(dismissRunnable, DISPLAY_DURATION_MS)
+        notice.postDelayed(dismissRunnable, GalleryTransientNoticePolicy.DisplayDurationMs)
     }
 
     fun dismiss() {
@@ -87,9 +87,5 @@ class GalleryTransientNoticeHost(
             Color.green(color),
             Color.blue(color),
         )
-    }
-
-    private companion object {
-        const val DISPLAY_DURATION_MS = 2400L
     }
 }
