@@ -13,9 +13,10 @@ import android.widget.TextView
 /**
  * Gallery-owned, non-modal transient feedback surface.
  *
- * This keeps short-lived application feedback inside the first-party Glaze surface rather
- * than delegating presentation to platform Toast UI. The host owns presentation only; it
- * does not change MediaStore, Favorites, settings, import/export, or sharing authority.
+ * This is a bounded native mapping of the Glaze UI 2.2 GlzToast standard variant for
+ * application-owned confirmation/status feedback. It keeps short-lived feedback inside the
+ * first-party Gallery surface rather than delegating presentation to platform Toast UI.
+ * Presentation never changes MediaStore, Favorites, settings, import/export, or sharing authority.
  */
 class GalleryTransientNoticeHost(
     private val root: FrameLayout,
@@ -35,19 +36,19 @@ class GalleryTransientNoticeHost(
         val notice = TextView(root.context).apply {
             text = normalized
             setTextColor(textColor())
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, GalleryGlazeContract.TRANSIENT_NOTICE_TEXT_SP)
             setTypeface(typeface, Typeface.BOLD)
             gravity = Gravity.CENTER
-            minHeight = (48f * density).toInt()
+            minHeight = (GalleryGlazeContract.TRANSIENT_NOTICE_STANDARD_HEIGHT_DP * density).toInt()
             setPadding(
-                (18f * density).toInt(),
+                (GalleryGlazeContract.TRANSIENT_NOTICE_HORIZONTAL_PADDING_DP * density).toInt(),
                 (10f * density).toInt(),
-                (18f * density).toInt(),
+                (GalleryGlazeContract.TRANSIENT_NOTICE_HORIZONTAL_PADDING_DP * density).toInt(),
                 (10f * density).toInt(),
             )
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = 18f * density
+                cornerRadius = GalleryGlazeContract.TRANSIENT_NOTICE_RADIUS_DP * density
                 setColor(surfaceColor())
                 setStroke(maxOf(1, density.toInt()), withAlpha(accentColor(), 0.24f))
             }
