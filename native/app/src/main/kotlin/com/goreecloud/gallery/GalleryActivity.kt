@@ -2276,6 +2276,10 @@ class GalleryActivity : Activity() {
         namespace: String,
     ) {
         val cacheKey = thumbnailCacheKey(namespace, item.contentUri)
+        if (namespace == VIEWER_THUMBNAIL_NAMESPACE) {
+            loadAuthorizedViewerBitmap(item, target, generation, cacheKey, sizeDp)
+            return
+        }
         thumbnailCache.get(cacheKey)?.let { cached ->
             if (generation == loadGeneration && target.tag == cacheKey) target.setImageBitmap(cached)
             return
@@ -2297,6 +2301,48 @@ class GalleryActivity : Activity() {
             }
         } catch (_: RuntimeException) {
             // Executor replacement can cancel queued thumbnail work; presentation remains safely empty until re-rendered.
+        }
+    }
+
+    private fun loadAuthorizedViewerBitmap(
+        item: MediaItem,
+        target: ImageView,
+        generation: Int,
+        cacheKey: String,
+        fallbackSizeDp: Int,
+    ) {
+        target.post {
+            if (
+                generation != loadGeneration ||
+                target.tag != cacheKey ||
+                viewerOverlay == null
+            ) return@post
+
+            val viewportWidth = target.width
+            val viewportHeight = target.height
+            try {
+                thumbnailExecutor.execute {
+                    val bitmap = GalleryViewerBitmapLoader.load(
+                        contentResolver = contentResolver,
+                        contentUri = Uri.parse(item.contentUri),
+                        mimeType = item.mimeType,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        fallbackThumbnailPx = dp(fallbackSizeDp),
+                    ) ?: return@execute
+                    runOnUiThread {
+                        if (
+                            generation == loadGeneration &&
+                            target.tag == cacheKey &&
+                            viewerOverlay != null
+                        ) {
+                            target.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+            } catch (_: RuntimeException) {
+                // Executor replacement can cancel queued viewer work; presentation remains safely empty until re-rendered.
+            }
         }
     }
 
