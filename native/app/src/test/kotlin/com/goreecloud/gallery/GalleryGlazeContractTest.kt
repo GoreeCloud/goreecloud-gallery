@@ -2,14 +2,34 @@ package com.goreecloud.gallery
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GalleryGlazeContractTest {
     @Test
-    fun `native shell targets current stable Glaze contract and accessible target floor`() {
-        assertEquals("2.1.0", GalleryGlazeContract.VERSION)
-        assertTrue(GalleryGlazeContract.GENERAL_TARGET_DP >= 48)
+    fun `native shell targets current stable Glaze contract and accessible target floors`() {
+        assertEquals("2.2.0", GalleryGlazeContract.VERSION)
+        assertEquals("fb5ecde4a8258503789ffde08ac46a2e524ef71e", GalleryGlazeContract.STABLE_PROMOTION_HEAD)
+        assertEquals("6731098b28dd0393faa878c70d989a221d714a20", GalleryGlazeContract.STABLE_RELEASE_REVISION)
+        assertEquals(48, GalleryGlazeContract.interactionTargetDp(touchAssistance = false))
+        assertEquals(56, GalleryGlazeContract.interactionTargetDp(touchAssistance = true))
         assertTrue(GalleryGlazeContract.NAVIGATION_HEIGHT_DP >= GalleryGlazeContract.GENERAL_TARGET_DP)
+    }
+
+    @Test
+    fun `native shell records the bounded 2_2 system glaze budget`() {
+        assertEquals(1, GalleryGlazeContract.SYSTEM_GLAZE_DOMINANT_PANEL_MAX)
+        assertEquals(3, GalleryGlazeContract.SYSTEM_GLAZE_SMALL_FLOATING_CONTROLS_MAX)
+        assertFalse(GalleryGlazeContract.NESTED_BACKDROP_BLUR_ALLOWED)
+    }
+
+    @Test
+    fun `transient notice geometry maps the GlzToast standard variant`() {
+        assertEquals(52, GalleryGlazeContract.TRANSIENT_NOTICE_STANDARD_HEIGHT_DP)
+        assertEquals(20, GalleryGlazeContract.TRANSIENT_NOTICE_RADIUS_DP)
+        assertEquals(16, GalleryGlazeContract.TRANSIENT_NOTICE_HORIZONTAL_PADDING_DP)
+        assertEquals(14f, GalleryGlazeContract.TRANSIENT_NOTICE_TEXT_SP)
+        assertTrue(GalleryGlazeContract.TRANSIENT_NOTICE_STANDARD_HEIGHT_DP >= GalleryGlazeContract.GENERAL_TARGET_DP)
     }
 
     @Test
