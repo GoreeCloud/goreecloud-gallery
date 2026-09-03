@@ -77,6 +77,7 @@ class GalleryActivity : Activity() {
 
     private val favoriteUris = linkedSetOf<String>()
     private val selectedUris = linkedSetOf<String>()
+    private val renderedMediaTiles = linkedMapOf<String, FrameLayout>()
     private var selectionScopeItems: List<MediaItem> = emptyList()
     private var loadGeneration = 0
     private var authorizedItems: List<MediaItem> = emptyList()
@@ -784,6 +785,7 @@ class GalleryActivity : Activity() {
 
         updateHeader()
         renderNavigation()
+        renderedMediaTiles.clear()
         library.removeAllViews()
 
         if (destination == GalleryDestination.SETTINGS) {
@@ -1136,11 +1138,7 @@ class GalleryActivity : Activity() {
             isLongClickable = true
             isFocusable = true
             isSelected = selected
-            contentDescription = if (inSelectionMode) {
-                "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
-            } else {
-                "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer. Long press to select."
-            }
+            contentDescription = mediaTileContentDescription(item, selected)
             setOnClickListener {
                 if (inSelectionMode) toggleSelection(item, items)
                 else showAuthorizedViewer(items, index, generation)
@@ -1154,15 +1152,15 @@ class GalleryActivity : Activity() {
                 thumbnail,
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
-            if (selected) {
-                addView(
-                    View(context).apply {
-                        background = roundedSurface(withAlpha(accentColor(), 0.20f), cornerDp)
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    },
-                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-                )
-            }
+            addView(
+                View(context).apply {
+                    tag = SELECTION_OVERLAY_TAG
+                    visibility = if (selected) View.VISIBLE else View.GONE
+                    background = roundedSurface(withAlpha(accentColor(), 0.20f), cornerDp)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            )
             if (item.mimeType.startsWith("video/")) {
                 addView(
                     TextView(context).apply {
@@ -1182,24 +1180,46 @@ class GalleryActivity : Activity() {
                     },
                 )
             }
-            if (selected) {
-                addView(
-                    TextView(context).apply {
-                        text = "✓"
-                        gravity = Gravity.CENTER
-                        setTextColor(Color.WHITE)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                        setTypeface(typeface, Typeface.BOLD)
-                        background = roundedSurface(accentColor(), 14)
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    },
-                    FrameLayout.LayoutParams(dp(28), dp(28)).apply {
-                        gravity = Gravity.END or Gravity.TOP
-                        marginEnd = dp(5)
-                        topMargin = dp(5)
-                    },
-                )
-            }
+            addView(
+                TextView(context).apply {
+                    tag = SELECTION_CHECK_TAG
+                    visibility = if (selected) View.VISIBLE else View.GONE
+                    text = "✓"
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTypeface(typeface, Typeface.BOLD)
+                    background = roundedSurface(accentColor(), 14)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                FrameLayout.LayoutParams(dp(28), dp(28)).apply {
+                    gravity = Gravity.END or Gravity.TOP
+                    marginEnd = dp(5)
+                    topMargin = dp(5)
+                },
+            )
+        }.also { tile ->
+            renderedMediaTiles[item.contentUri] = tile
+        }
+    }
+
+    private fun mediaTileContentDescription(item: MediaItem, selected: Boolean): String =
+        if (inSelectionMode) {
+            "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
+        } else {
+            "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer. Long press to select."
+        }
+
+    private fun refreshRenderedSelectionState() {
+        val itemsByUri = selectionScopeItems.associateBy { it.contentUri }
+        renderedMediaTiles.forEach { (contentUri, tile) ->
+            val item = itemsByUri[contentUri] ?: return@forEach
+            val selected = contentUri in selectedUris
+            val selectionVisibility = if (selected) View.VISIBLE else View.GONE
+            tile.isSelected = selected
+            tile.contentDescription = mediaTileContentDescription(item, selected)
+            tile.findViewWithTag<View>(SELECTION_OVERLAY_TAG)?.visibility = selectionVisibility
+            tile.findViewWithTag<View>(SELECTION_CHECK_TAG)?.visibility = selectionVisibility
         }
     }
 
@@ -1224,7 +1244,9 @@ class GalleryActivity : Activity() {
                 if (selectedUris.size == 1) "1 item selected" else "${selectedUris.size} items selected",
             )
         }
-        renderCurrentDestination()
+        refreshRenderedSelectionState()
+        updateHeader()
+        renderNavigation()
     }
 
     private fun clearSelection(render: Boolean = true) {
@@ -2625,6 +2647,8 @@ class GalleryActivity : Activity() {
         const val GRID_THUMBNAIL_NAMESPACE = "grid"
         const val ALBUM_THUMBNAIL_NAMESPACE = "album"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
+        const val SELECTION_OVERLAY_TAG = "goreecloud_gallery_selection_overlay"
+        const val SELECTION_CHECK_TAG = "goreecloud_gallery_selection_check"
 
         const val LOCAL_STATE_PREFERENCES = "goreecloud_gallery_local_state"
         const val FAVORITES_KEY = "favorite_content_uris"
