@@ -34,6 +34,25 @@ object AndroidMediaStoreProjection {
     }
 }
 
+/**
+ * Projects rows discovered through MediaStore.Files onto the media-specific item collections that
+ * Android's write/trash/delete request APIs accept. Browsing can remain a single bounded Files
+ * query, while MediaItem content URIs retain their canonical image/video identity.
+ */
+internal object AndroidMediaStoreItemUris {
+    fun collectionUriForMimeType(volumeName: String, mimeType: String): String {
+        require(volumeName.isNotBlank()) { "MediaStore volume name is required" }
+        val normalizedMimeType = mimeType.trim().lowercase()
+        return when {
+            normalizedMimeType.startsWith("image/") ->
+                MediaStore.Images.Media.getContentUri(volumeName).toString()
+            normalizedMimeType.startsWith("video/") ->
+                MediaStore.Video.Media.getContentUri(volumeName).toString()
+            else -> throw IllegalArgumentException("MediaStore row must be image or video content")
+        }
+    }
+}
+
 data class AndroidMediaStoreReadResult(
     val items: List<MediaItem>,
     val rejectedRowCount: Int,
@@ -56,6 +75,7 @@ class AndroidMediaStoreReader(
         require(maxRows in 1..MAX_ROWS) { "maxRows must be between 1 and $MAX_ROWS" }
 
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val volumeName = MediaStore.getVolumeName(collection)
         val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
         val selectionArgs = arrayOf(
             MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
@@ -83,7 +103,12 @@ class AndroidMediaStoreReader(
             while (inspected < maxRows && it.moveToNext()) {
                 inspected += 1
                 try {
-                    items += indices.readRow(it, collection.toString()).toMediaItem()
+                    val row = indices.readRow(it, collection.toString())
+                    val itemCollectionUri = AndroidMediaStoreItemUris.collectionUriForMimeType(
+                        volumeName = volumeName,
+                        mimeType = row.mimeType,
+                    )
+                    items += row.copy(collectionUri = itemCollectionUri).toMediaItem()
                 } catch (_: IllegalArgumentException) {
                     rejected += 1
                 }
