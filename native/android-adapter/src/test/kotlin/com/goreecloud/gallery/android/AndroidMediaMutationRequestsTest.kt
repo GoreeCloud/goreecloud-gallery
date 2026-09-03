@@ -28,6 +28,47 @@ class AndroidMediaMutationRequestsTest {
     }
 
     @Test
+    fun `normalization accepts media specific item uris on alternate volumes`() {
+        val image = "content://media/external_primary/images/media/42"
+        val video = "content://media/1234-5678/video/media/7"
+
+        assertEquals(
+            listOf(image, video),
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(image, video)),
+        )
+    }
+
+    @Test
+    fun `normalization rejects generic files collection item uris`() {
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(
+                listOf("content://media/external/file/42"),
+            )
+        }
+    }
+
+    @Test
+    fun `normalization rejects media collection uris without item id`() {
+        listOf(
+            "content://media/external/images/media",
+            "content://media/external/video/media",
+        ).forEach { uri ->
+            assertFailsWith<IllegalArgumentException> {
+                AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(uri))
+            }
+        }
+    }
+
+    @Test
+    fun `normalization rejects non numeric media item ids`() {
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(
+                listOf("content://media/external/images/media/not-an-id"),
+            )
+        }
+    }
+
+    @Test
     fun `normalization rejects non MediaStore authorities`() {
         assertFailsWith<IllegalArgumentException> {
             AndroidMediaMutationRequests.normalizeMediaStoreUris(
