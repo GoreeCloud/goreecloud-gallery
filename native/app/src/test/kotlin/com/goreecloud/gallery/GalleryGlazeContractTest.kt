@@ -6,8 +6,8 @@ import kotlin.test.assertTrue
 
 class GalleryGlazeContractTest {
     @Test
-    fun `native shell targets current stable Glaze contract and accessible target floor`() {
-        assertEquals("2.1.0", GalleryGlazeContract.VERSION)
+    fun `native shell targets current official Glaze contract and accessible target floor`() {
+        assertEquals("1.1.0", GalleryGlazeContract.VERSION)
         assertTrue(GalleryGlazeContract.GENERAL_TARGET_DP >= 48)
         assertTrue(GalleryGlazeContract.NAVIGATION_HEIGHT_DP >= GalleryGlazeContract.GENERAL_TARGET_DP)
     }
