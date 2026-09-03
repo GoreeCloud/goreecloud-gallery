@@ -11,8 +11,8 @@ android {
         applicationId = "com.goreecloud.gallery"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.7.0-dev"
+        versionCode = 11
+        versionName = "0.7.1-dev"
     }
 
     compileOptions {
