@@ -2,6 +2,7 @@ package com.goreecloud.gallery
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
@@ -32,6 +33,8 @@ import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import com.goreecloud.gallery.android.AndroidTrashedMediaStoreReader
 import com.goreecloud.gallery.core.GallerySelectionPolicy
 import com.goreecloud.gallery.core.MediaItem
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
@@ -55,6 +58,7 @@ class RecycleBinActivity : Activity() {
     private val selectedUris = linkedSetOf<String>()
     private val renderedTiles = linkedMapOf<String, FrameLayout>()
     private var pendingMutation: PendingRecycleMutation? = null
+    private var viewerOverlay: View? = null
 
     private val thumbnailExecutor: ExecutorService = Executors.newFixedThreadPool(2)
     private val thumbnailCache = object : LruCache<String, Bitmap>(8 * 1024) {
@@ -64,12 +68,11 @@ class RecycleBinActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildSurface()
-        loadRecycleBin()
     }
 
     override fun onResume() {
         super.onResume()
-        if (pendingMutation == null) loadRecycleBin()
+        if (pendingMutation == null && viewerOverlay == null) loadRecycleBin()
     }
 
     override fun onDestroy() {
@@ -77,6 +80,20 @@ class RecycleBinActivity : Activity() {
         thumbnailExecutor.shutdownNow()
         thumbnailCache.evictAll()
         super.onDestroy()
+    }
+
+    @Deprecated("Recycle Bin back navigation is handled explicitly for viewer and selection state.")
+    override fun onBackPressed() {
+        if (viewerOverlay != null) {
+            closeViewer()
+            return
+        }
+        if (selectedUris.isNotEmpty()) {
+            selectedUris.clear()
+            renderSelectionState()
+            return
+        }
+        super.onBackPressed()
     }
 
     @Deprecated("Development Recycle Bin uses Android activity results for system mutation confirmation.")
@@ -94,6 +111,7 @@ class RecycleBinActivity : Activity() {
             }
             selectedUris.clear()
             thumbnailCache.evictAll()
+            closeViewer(render = false)
             Toast.makeText(
                 this,
                 when (mutation.mode) {
@@ -114,7 +132,7 @@ class RecycleBinActivity : Activity() {
                 if (mutation.mode == AndroidMediaMutationMode.RESTORE) "Restore canceled" else "Permanent delete canceled",
                 Toast.LENGTH_SHORT,
             ).show()
-            renderSelectionState()
+            if (viewerOverlay == null) renderSelectionState()
         }
     }
 
@@ -205,11 +223,11 @@ class RecycleBinActivity : Activity() {
         )
 
         setContentView(root)
-        window.statusBarColor = canvasColor()
-        window.navigationBarColor = canvasColor()
+        applySystemChrome()
     }
 
     private fun loadRecycleBin() {
+        if (viewerOverlay != null || pendingMutation != null) return
         val currentGeneration = ++generation
         selectedUris.clear()
         renderedTiles.clear()
@@ -217,16 +235,21 @@ class RecycleBinActivity : Activity() {
         body.removeAllViews()
 
         if (!AndroidTrashedMediaStoreReader.isSupported()) {
+            trashedItems = emptyList()
+            headerTitle.text = "Recycle Bin"
             headerSubtitle.text = "Requires Android 11 or newer"
             body.addView(emptyState("Recycle Bin unavailable", "Android MediaStore Trash browsing requires Android 11 or newer."))
             return
         }
         if (!hasReadableMediaAccess()) {
+            trashedItems = emptyList()
+            headerTitle.text = "Recycle Bin"
             headerSubtitle.text = "Media access required"
             body.addView(emptyState("Media access required", "Open GoreeCloud Gallery and allow Android media access before browsing the Recycle Bin."))
             return
         }
 
+        headerTitle.text = "Recycle Bin"
         headerSubtitle.text = "Loading Android MediaStore Trash…"
         body.addView(messageRow("Loading Recycle Bin", "Reading only image/video items Android currently exposes as trashed."))
 
@@ -251,6 +274,7 @@ class RecycleBinActivity : Activity() {
         body.removeAllViews()
         renderedTiles.clear()
         val count = trashedItems.size
+        headerTitle.text = "Recycle Bin"
         headerSubtitle.text = buildString {
             append(if (count == 1) "1 item" else "$count items")
             if (rejectedRows > 0) append(" · $rejectedRows skipped")
@@ -272,6 +296,7 @@ class RecycleBinActivity : Activity() {
             trashedItems = emptyList()
             selectedUris.clear()
             renderedTiles.clear()
+            headerTitle.text = "Recycle Bin"
             headerSubtitle.text = "Recycle Bin unavailable"
             body.removeAllViews()
             body.addView(messageRow("Recycle Bin unavailable", message))
@@ -293,7 +318,7 @@ class RecycleBinActivity : Activity() {
             }
             rowItems.forEachIndexed { columnIndex, item ->
                 row.addView(
-                    mediaTile(item, currentGeneration),
+                    mediaTile(item, items, currentGeneration),
                     LinearLayout.LayoutParams(0, tileSize, 1f).apply {
                         if (columnIndex > 0) marginStart = gap
                     },
@@ -316,14 +341,14 @@ class RecycleBinActivity : Activity() {
         }
     }
 
-    private fun mediaTile(item: MediaItem, currentGeneration: Int): FrameLayout {
+    private fun mediaTile(item: MediaItem, items: List<MediaItem>, currentGeneration: Int): FrameLayout {
         val selected = item.contentUri in selectedUris
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = roundedSurface(withAlpha(primaryTextColor(), 0.08f), 14)
-            tag = item.contentUri
+            tag = gridCacheKey(item.contentUri)
         }
-        loadThumbnail(item, image, currentGeneration)
+        loadThumbnail(item, image, currentGeneration, GRID_THUMBNAIL_PX, GRID_CACHE_PREFIX)
 
         return FrameLayout(this).apply {
             background = roundedSurface(withAlpha(primaryTextColor(), 0.08f), 14)
@@ -332,8 +357,15 @@ class RecycleBinActivity : Activity() {
             isLongClickable = true
             isFocusable = true
             isSelected = selected
-            contentDescription = selectionDescription(item, selected)
-            setOnClickListener { toggleSelection(item) }
+            contentDescription = tileDescription(item, selected)
+            setOnClickListener {
+                if (selectedUris.isNotEmpty()) {
+                    toggleSelection(item)
+                } else {
+                    val index = items.indexOfFirst { it.contentUri == item.contentUri }
+                    if (index >= 0) showViewer(items, index, currentGeneration)
+                }
+            }
             setOnLongClickListener {
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 toggleSelection(item)
@@ -345,18 +377,20 @@ class RecycleBinActivity : Activity() {
                     tag = SELECTION_OVERLAY_TAG
                     visibility = if (selected) View.VISIBLE else View.GONE
                     background = roundedSurface(withAlpha(accentColor(), 0.22f), 14)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 },
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
             if (item.mimeType.startsWith("video/")) {
                 addView(TextView(context).apply {
-                    text = "Video"
+                    text = item.durationMillis?.let(::formatDuration) ?: "VIDEO"
                     setTextColor(Color.WHITE)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                     setTypeface(typeface, Typeface.BOLD)
                     gravity = Gravity.CENTER
                     setPadding(dp(7), dp(3), dp(7), dp(3))
                     background = roundedSurface(0xb3000000.toInt(), 9)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.END or Gravity.BOTTOM
                     marginEnd = dp(5)
@@ -373,6 +407,7 @@ class RecycleBinActivity : Activity() {
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                     setTypeface(typeface, Typeface.BOLD)
                     background = roundedSurface(accentColor(), 14)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 },
                 FrameLayout.LayoutParams(dp(28), dp(28)).apply {
                     gravity = Gravity.END or Gravity.TOP
@@ -396,18 +431,23 @@ class RecycleBinActivity : Activity() {
             val item = byUri[uri] ?: return@forEach
             val selected = uri in selectedUris
             tile.isSelected = selected
-            tile.contentDescription = selectionDescription(item, selected)
+            tile.contentDescription = tileDescription(item, selected)
             tile.findViewWithTag<View>(SELECTION_OVERLAY_TAG)?.visibility = if (selected) View.VISIBLE else View.GONE
             tile.findViewWithTag<View>(SELECTION_CHECK_TAG)?.visibility = if (selected) View.VISIBLE else View.GONE
         }
         headerTitle.text = if (selectedUris.isEmpty()) "Recycle Bin" else if (selectedUris.size == 1) "1 selected" else "${selectedUris.size} selected"
+        if (selectedUris.isEmpty()) {
+            headerSubtitle.text = if (trashedItems.size == 1) "1 item · Android controls retention" else "${trashedItems.size} items · Android controls retention"
+        } else {
+            headerSubtitle.text = "Restore or permanently delete the current selection"
+        }
         renderActionBar()
     }
 
     private fun renderActionBar() {
         if (!::actionBar.isInitialized) return
         actionBar.removeAllViews()
-        if (selectedUris.isEmpty()) {
+        if (selectedUris.isEmpty() || viewerOverlay != null) {
             actionBar.visibility = View.GONE
             return
         }
@@ -436,9 +476,186 @@ class RecycleBinActivity : Activity() {
         }
     }
 
-    private fun requestMutation(mode: AndroidMediaMutationMode) {
-        if (pendingMutation != null || selectedUris.isEmpty()) return
-        val selectedItems = GallerySelectionPolicy.resolve(trashedItems, selectedUris)
+    private fun showViewer(items: List<MediaItem>, initialIndex: Int, currentGeneration: Int) {
+        if (
+            currentGeneration != generation ||
+            !hasReadableMediaAccess() ||
+            initialIndex !in items.indices
+        ) return
+
+        selectedUris.clear()
+        renderSelectionState()
+        viewerOverlay?.let { root.removeView(it) }
+        actionBar.visibility = View.GONE
+
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        viewerOverlay = overlay
+        root.addView(
+            overlay,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.BLACK
+        @Suppress("DEPRECATION")
+        run { window.decorView.systemUiVisibility = 0 }
+
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+        }
+        overlay.addView(
+            preview,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                topMargin = dp(72)
+                bottomMargin = dp(104)
+            },
+        )
+
+        val topBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = roundedSurface(0xd9141416.toInt(), 22)
+        }
+        val viewerBack = viewerAction("‹", "Close Recycle Bin viewer") { closeViewer() }.apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
+        }
+        topBar.addView(viewerBack, LinearLayout.LayoutParams(dp(48), dp(48)))
+        val viewerTitle = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTypeface(typeface, Typeface.BOLD)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        val viewerSubtitle = TextView(this).apply {
+            setTextColor(0xffc8c8cc.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        topBar.addView(
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(8), 0, dp(6), 0)
+                addView(viewerTitle)
+                addView(viewerSubtitle)
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        overlay.addView(
+            topBar,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)).apply {
+                gravity = Gravity.TOP
+                marginStart = dp(10)
+                marginEnd = dp(10)
+                topMargin = dp(6)
+            },
+        )
+
+        val previous = viewerAction("‹", "Previous trashed media") {}
+        val next = viewerAction("›", "Next trashed media") {}
+        previous.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
+        next.setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
+        overlay.addView(previous, FrameLayout.LayoutParams(dp(52), dp(64)).apply {
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            marginStart = dp(10)
+        })
+        overlay.addView(next, FrameLayout.LayoutParams(dp(52), dp(64)).apply {
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            marginEnd = dp(10)
+        })
+
+        val bottomBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            background = roundedSurface(0xe8141416.toInt(), 24)
+        }
+        val restore = viewerAction("Restore", "Restore this media through Android confirmation") {}
+        val purge = viewerAction("Delete permanently", "Permanently delete this media through Android confirmation") {}
+        val more = viewerAction("More", "Show details for this trashed media") {}
+        listOf(restore, purge, more).forEachIndexed { index, action ->
+            bottomBar.addView(action, LinearLayout.LayoutParams(0, dp(60), 1f).apply {
+                if (index > 0) marginStart = dp(3)
+            })
+        }
+        overlay.addView(
+            bottomBar,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)).apply {
+                gravity = Gravity.BOTTOM
+                marginStart = dp(10)
+                marginEnd = dp(10)
+                bottomMargin = dp(16)
+            },
+        )
+
+        var currentIndex = initialIndex
+
+        fun renderCurrent() {
+            if (
+                currentGeneration != generation ||
+                !hasReadableMediaAccess() ||
+                currentIndex !in items.indices
+            ) {
+                closeViewer()
+                return
+            }
+            val item = items[currentIndex]
+            val cacheKey = viewerCacheKey(item.contentUri)
+            preview.setImageDrawable(null)
+            preview.tag = cacheKey
+            preview.contentDescription = "Recycle Bin viewer for ${item.displayName}"
+            viewerTitle.text = item.displayName
+            viewerSubtitle.text = "${currentIndex + 1} of ${items.size} · ${mediaMetadata(item)}"
+            previous.isEnabled = currentIndex > 0
+            previous.alpha = if (previous.isEnabled) 1f else 0.30f
+            next.isEnabled = currentIndex < items.lastIndex
+            next.alpha = if (next.isEnabled) 1f else 0.30f
+            loadThumbnail(item, preview, currentGeneration, VIEWER_THUMBNAIL_PX, VIEWER_CACHE_PREFIX)
+        }
+
+        previous.setOnClickListener {
+            if (currentIndex > 0) {
+                currentIndex -= 1
+                renderCurrent()
+            }
+        }
+        next.setOnClickListener {
+            if (currentIndex < items.lastIndex) {
+                currentIndex += 1
+                renderCurrent()
+            }
+        }
+        restore.setOnClickListener {
+            items.getOrNull(currentIndex)?.let { requestMutation(AndroidMediaMutationMode.RESTORE, listOf(it)) }
+        }
+        purge.setOnClickListener {
+            items.getOrNull(currentIndex)?.let { requestMutation(AndroidMediaMutationMode.DELETE, listOf(it)) }
+        }
+        more.setOnClickListener {
+            items.getOrNull(currentIndex)?.let(::showItemDetails)
+        }
+
+        renderCurrent()
+    }
+
+    private fun closeViewer(render: Boolean = true) {
+        val overlay = viewerOverlay ?: return
+        root.removeView(overlay)
+        viewerOverlay = null
+        applySystemChrome()
+        if (render) {
+            renderSelectionState()
+        }
+    }
+
+    private fun requestMutation(mode: AndroidMediaMutationMode, explicitItems: List<MediaItem>? = null) {
+        if (pendingMutation != null) return
+        val selectedItems = explicitItems ?: GallerySelectionPolicy.resolve(trashedItems, selectedUris)
         if (selectedItems.isEmpty()) return
 
         val request = try {
@@ -473,25 +690,57 @@ class RecycleBinActivity : Activity() {
         }
     }
 
-    private fun loadThumbnail(item: MediaItem, target: ImageView, currentGeneration: Int) {
-        val key = item.contentUri
+    private fun loadThumbnail(
+        item: MediaItem,
+        target: ImageView,
+        currentGeneration: Int,
+        sizePx: Int,
+        cachePrefix: String,
+    ) {
+        val key = "$cachePrefix:${item.contentUri}"
+        target.tag = key
         thumbnailCache.get(key)?.let {
             target.setImageBitmap(it)
             return
         }
-        thumbnailExecutor.execute {
-            val bitmap = try {
-                contentResolver.loadThumbnail(Uri.parse(item.contentUri), Size(256, 256), null)
-            } catch (_: Exception) {
-                null
-            }
-            if (bitmap != null) thumbnailCache.put(key, bitmap)
-            runOnUiThread {
-                if (currentGeneration == generation && target.tag == key && bitmap != null) {
-                    target.setImageBitmap(bitmap)
+        try {
+            thumbnailExecutor.execute {
+                val bitmap = try {
+                    contentResolver.loadThumbnail(Uri.parse(item.contentUri), Size(sizePx, sizePx), null)
+                } catch (_: Exception) {
+                    null
+                }
+                if (bitmap != null) thumbnailCache.put(key, bitmap)
+                runOnUiThread {
+                    if (currentGeneration == generation && target.tag == key && bitmap != null) {
+                        target.setImageBitmap(bitmap)
+                    }
                 }
             }
+        } catch (_: RuntimeException) {
+            // Activity teardown or executor shutdown can cancel presentation work without changing Trash state.
         }
+    }
+
+    private fun showItemDetails(item: MediaItem) {
+        val dimensions = if (item.width != null && item.height != null) "${item.width} × ${item.height}" else "Unknown"
+        val duration = item.durationMillis?.let(::formatDuration) ?: "Not applicable"
+        AlertDialog.Builder(this)
+            .setTitle(item.displayName)
+            .setMessage(
+                listOf(
+                    "State: In Android Recycle Bin",
+                    "Type: ${if (item.mimeType.startsWith("video/")) "Video" else "Photo"}",
+                    "Album: ${item.albumName ?: "Not grouped"}",
+                    "Date: ${DATE_TIME_FORMAT.format(item.capturedAt ?: item.modifiedAt)}",
+                    "Dimensions: $dimensions",
+                    "Duration: $duration",
+                    "Size: ${formatBytes(item.sizeBytes)}",
+                    "Retention: Controlled by Android MediaStore",
+                ).joinToString("\n"),
+            )
+            .setPositiveButton("Done", null)
+            .show()
     }
 
     private fun removePurgedFavorites(contentUris: Set<String>) {
@@ -512,8 +761,28 @@ class RecycleBinActivity : Activity() {
         else -> checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun selectionDescription(item: MediaItem, selected: Boolean): String =
-        "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
+    private fun tileDescription(item: MediaItem, selected: Boolean): String =
+        if (selectedUris.isNotEmpty()) {
+            "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
+        } else {
+            "${item.displayName}. In Recycle Bin. Double tap to open viewer. Long press to select."
+        }
+
+    private fun mediaMetadata(item: MediaItem): String {
+        val kind = if (item.mimeType.startsWith("video/")) "Video" else "Photo"
+        return listOfNotNull(
+            kind,
+            item.albumName,
+            formatBytes(item.sizeBytes),
+        ).joinToString(" · ")
+    }
+
+    private fun formatDuration(milliseconds: Long): String {
+        val seconds = milliseconds / 1000
+        val minutes = seconds / 60
+        val remainder = seconds % 60
+        return "$minutes:${remainder.toString().padStart(2, '0')}"
+    }
 
     private fun textAction(label: String, description: String, onClick: () -> Unit): TextView = TextView(this).apply {
         text = label
@@ -524,6 +793,22 @@ class RecycleBinActivity : Activity() {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, if (label.length > 12) 10.5f else 12f)
         setTypeface(typeface, Typeface.BOLD)
         background = roundedSurface(withAlpha(accentColor(), 0.10f), 18)
+        isClickable = true
+        isFocusable = true
+        contentDescription = description
+        setOnClickListener { onClick() }
+    }
+
+    private fun viewerAction(label: String, description: String, onClick: () -> Unit): TextView = TextView(this).apply {
+        text = label
+        gravity = Gravity.CENTER
+        minHeight = dp(48)
+        minWidth = dp(48)
+        setPadding(dp(8), 0, dp(8), 0)
+        setTextColor(Color.WHITE)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (label.length > 12) 10.5f else 12f)
+        setTypeface(typeface, Typeface.BOLD)
+        background = roundedSurface(0x26ffffff, 18)
         isClickable = true
         isFocusable = true
         contentDescription = description
@@ -571,6 +856,23 @@ class RecycleBinActivity : Activity() {
         Color.blue(color),
     )
 
+    private fun applySystemChrome() {
+        val canvas = canvasColor()
+        window.statusBarColor = canvas
+        window.navigationBarColor = canvas
+        @Suppress("DEPRECATION")
+        run {
+            var flags = 0
+            if (!isNightMode()) {
+                flags = flags or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    flags = flags or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+                }
+            }
+            window.decorView.systemUiVisibility = flags
+        }
+    }
+
     private fun isNightMode(): Boolean =
         resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
 
@@ -592,6 +894,8 @@ class RecycleBinActivity : Activity() {
         else -> 3
     }
 
+    private fun gridCacheKey(contentUri: String): String = "$GRID_CACHE_PREFIX:$contentUri"
+    private fun viewerCacheKey(contentUri: String): String = "$VIEWER_CACHE_PREFIX:$contentUri"
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private data class PendingRecycleMutation(
@@ -602,9 +906,22 @@ class RecycleBinActivity : Activity() {
     companion object {
         private const val MAX_TRASH_ROWS = 250
         private const val RECYCLE_MUTATION_REQUEST = 7301
+        private const val GRID_THUMBNAIL_PX = 256
+        private const val VIEWER_THUMBNAIL_PX = 1280
+        private const val GRID_CACHE_PREFIX = "recycle-grid"
+        private const val VIEWER_CACHE_PREFIX = "recycle-viewer"
         private const val SELECTION_OVERLAY_TAG = "goreecloud_recycle_selection_overlay"
         private const val SELECTION_CHECK_TAG = "goreecloud_recycle_selection_check"
         private const val LOCAL_STATE_PREFERENCES = "goreecloud_gallery_local_state"
         private const val FAVORITES_KEY = "favorite_content_uris"
+
+        private val DATE_TIME_FORMAT: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("MMM d, yyyy · h:mm a").withZone(ZoneId.systemDefault())
+
+        private fun formatBytes(bytes: Long): String = when {
+            bytes >= 1024L * 1024L -> String.format("%.1f MiB", bytes / (1024.0 * 1024.0))
+            bytes >= 1024L -> String.format("%.1f KiB", bytes / 1024.0)
+            else -> "$bytes B"
+        }
     }
 }
