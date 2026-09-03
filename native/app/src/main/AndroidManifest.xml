@@ -13,6 +13,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.GoreeCloudGallery">
         <activity
+            android:name=".RecycleBinActivity"
+            android:exported="true"
+            android:label="Gallery Recycle Bin">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".GalleryActivity"
             android:exported="true">
             <intent-filter>
