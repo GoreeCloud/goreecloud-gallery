@@ -34,6 +34,30 @@ object AndroidMediaStoreProjection {
     }
 }
 
+/**
+ * Projects rows discovered through MediaStore.Files onto the media-specific item collections that
+ * Android's write/trash/delete request APIs accept. Browsing can remain a single bounded Files
+ * query, while MediaItem content URIs retain their canonical image/video identity.
+ *
+ * The projection itself is deliberately pure so local JVM tests can validate URI identity without
+ * depending on Android framework method execution. Runtime provider access remains Android-owned.
+ */
+internal object AndroidMediaStoreItemUris {
+    fun collectionUriForMimeType(volumeName: String, mimeType: String): String {
+        val normalizedVolume = volumeName.trim()
+        require(normalizedVolume.isNotEmpty()) { "MediaStore volume name is required" }
+        require('/' !in normalizedVolume) { "MediaStore volume name must not contain a path separator" }
+
+        val normalizedMimeType = mimeType.trim().lowercase()
+        val collectionPath = when {
+            normalizedMimeType.startsWith("image/") -> "images/media"
+            normalizedMimeType.startsWith("video/") -> "video/media"
+            else -> throw IllegalArgumentException("MediaStore row must be image or video content")
+        }
+        return "content://${MediaStore.AUTHORITY}/$normalizedVolume/$collectionPath"
+    }
+}
+
 data class AndroidMediaStoreReadResult(
     val items: List<MediaItem>,
     val rejectedRowCount: Int,
@@ -56,6 +80,7 @@ class AndroidMediaStoreReader(
         require(maxRows in 1..MAX_ROWS) { "maxRows must be between 1 and $MAX_ROWS" }
 
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val volumeName = MediaStore.getVolumeName(collection)
         val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
         val selectionArgs = arrayOf(
             MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
@@ -83,7 +108,12 @@ class AndroidMediaStoreReader(
             while (inspected < maxRows && it.moveToNext()) {
                 inspected += 1
                 try {
-                    items += indices.readRow(it, collection.toString()).toMediaItem()
+                    val row = indices.readRow(it, collection.toString())
+                    val itemCollectionUri = AndroidMediaStoreItemUris.collectionUriForMimeType(
+                        volumeName = volumeName,
+                        mimeType = row.mimeType,
+                    )
+                    items += row.copy(collectionUri = itemCollectionUri).toMediaItem()
                 } catch (_: IllegalArgumentException) {
                     rejected += 1
                 }

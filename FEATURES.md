@@ -6,7 +6,7 @@ GoreeCloud Gallery is an original GoreeCloud-owned native Android application wh
 
 Historical GoreeCloud Gallery screenshots, prior Gallery behavior, repository history, and applicable Samsung Gallery interaction references are migration and visual-comparison inputs. They are not authorization to copy Samsung proprietary source code, assets, trademarks, or implementation details.
 
-The target is to recover the established GoreeCloud Gallery information architecture, browsing model, album behavior, viewer interactions, contextual actions, organization patterns, and first-party feature breadth, then revamp GoreeCloud-controlled presentation with the current Stable Glaze UI 2.1 contract.
+The target is to recover the established GoreeCloud Gallery information architecture, browsing model, album behavior, viewer interactions, contextual actions, organization patterns, and first-party feature breadth, then revamp GoreeCloud-controlled presentation under the official **GLAZE UI V1.0** authority. Gallery-specific production visual/accessibility acceptance remains separate from source adoption.
 
 ## Implemented in the first-party Development line
 
@@ -14,29 +14,32 @@ The target is to recover the established GoreeCloud Gallery information architec
 - Bounded MediaStore image/video reads through the compiled Android adapter.
 - Validated media-item and MediaStore-row domain models.
 - Local thumbnails with bounded in-memory caching and no cloud dependency.
-- Direct Glaze UI 2.1 Photos / Albums / Videos / Settings navigation in the current `0.5.0-dev` candidate.
+- Direct Photos / Albums / Videos / Settings navigation in the current `0.6.0-dev` candidate.
 - Dense adaptive Photos and Videos grids grouped into Today / Yesterday / calendar-date sections.
 - Newest / Oldest ordering over the current authorized snapshot.
 - Local search over authorized display names and album names without an additional provider query.
 - Dedicated Albums browsing with authoritative album covers, names, counts, adaptive cover layout, and bounded album-detail browsing.
 - Device-local Favorites backed only by Gallery app-local state; favorite/unfavorite is available from the viewer and authorized Favorites appear as a dedicated collection.
-- A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface. Viewer navigation now uses the complete current authorized/presented collection rather than being accidentally constrained to one date group.
+- A full-screen bounded media viewer shell with Previous / Next navigation, restrained top chrome, and a bottom action surface. Viewer navigation uses the complete current authorized/presented collection rather than one date group.
 - Android Share handoff for the currently authorized media content URI using read-only URI grant semantics.
 - Viewer details for type, album, date, dimensions, duration, and size when available.
-- **Rendered long-press selection and multi-select:** long-pressing a visible media tile enters selection mode; subsequent taps toggle items. Selected thumbnails receive a Glaze accent wash and check marker, the header shows the selected count, Back exits selection, and ordinary bottom navigation is replaced by a contextual action capsule.
+- **Rendered long-press selection and multi-select:** long-pressing a visible media tile enters selection mode; subsequent taps toggle items. Selected thumbnails receive an accent wash and check marker, the header shows the selected count, Back exits selection, and ordinary bottom navigation is replaced by a contextual action capsule.
 - **Bulk Share:** selected authorized media can be shared using Android `ACTION_SEND` for one item or `ACTION_SEND_MULTIPLE` for multiple items, with read-only URI grants and MIME planning derived only from the bounded current selection.
 - **Bulk Favorite / Unfavorite:** selection mode adds all selected authorized items to Favorites unless every selected item is already a Favorite, in which case it removes them. Favorites remain Gallery app-local state.
 - **Selection Details:** the contextual More action exposes media details when exactly one item is selected.
-- **Mutation actions remain unavailable in selection:** Move and Delete are visibly disabled until their separately approved Android-authorized mutation/Trash paths exist. Selection state never creates write authority.
+- **Android-authorized Delete / Trash candidate:** on Android 11 and newer, Delete is enabled in the viewer and selection mode. Gallery submits only bounded current MediaStore URIs to Android's system confirmation flow. With **Move deleted items to Recycle Bin** enabled, Android receives a `MediaStore.createTrashRequest(...)`; with the setting disabled, Android receives a `MediaStore.createDeleteRequest(...)` for confirmed permanent deletion. Gallery refreshes its authorized snapshot after a successful system result. This is Development behavior pending physical-device destructive-operation acceptance, not Stable qualification.
+- **Mutation bound:** a single Trash/Delete request is limited to 100 unique `content://media/...` URIs. Non-MediaStore, file, network, blank, or malformed URIs are rejected before Android mutation request creation.
+- **Android 10 fail-closed boundary:** this Development slice does not add a legacy direct-delete workaround. Delete remains unavailable below Android 11 until a separately approved compatibility path exists.
+- **Move remains unavailable in selection:** selection state does not create move/write authority; approved Move/Copy organization remains separate work.
 - Framework-independent selection policy provides toggle, select-all, prune, and resolve only against a caller-supplied current authorized/presented media scope; stale or foreign content URIs cannot become bulk-action authority.
 - Framework-independent non-destructive bulk-action policy preserves presentation order and derives the narrowest safe Share MIME type while deterministically planning Favorites Add/Remove.
-- Edit and Delete remain intentionally unavailable in the `0.5.0-dev` viewer until their approved editing/mutation paths are implemented and validated.
+- Edit remains intentionally unavailable in the `0.6.0-dev` viewer until an approved editing path is implemented and validated.
 - Video items currently use authorized poster thumbnails; native playback is not yet implemented.
 - Permission and load-generation re-checks before viewer rendering.
 - Framework-independent album/trash/recovery/mutation foundations used by later native milestones.
-- Glaze UI 2.1 source mapping, adaptive gutters, light/dark presentation, floating navigation/contextual action surfaces, and accessible control sizing foundations.
+- GLAZE UI V1.0 application-source mapping remains subject to full Gallery-specific visual, accessibility, adaptive-layout, and physical-device acceptance.
 
-### Settings available in the `0.5.0-dev` candidate
+### Settings available in the `0.6.0-dev` candidate
 
 The first-class Settings destination is available even before media access is granted. Settings are grouped into Performance, Library, Playback, Privacy & protection, Deletion & recovery, Appearance, Cache, Favorites, and Settings portability.
 
@@ -50,14 +53,14 @@ The following controls have active behavior in the current Development candidate
 - **Export Favorites / Import Favorites:** writes or reads a versioned local JSON representation of Gallery's app-local favorite content-URI set through Android's document provider. Import merges favorite state and does not grant access to media Android has not authorized.
 - **Export settings / Import settings:** writes or reads a versioned JSON document containing non-secret Gallery preferences, including folder visibility selections. Unknown fields are ignored and imports do not carry passwords, credentials, signing material, or media bytes.
 - **Rounded-square thumbnails:** toggles GoreeCloud rounded-square clipping for current media and album thumbnails.
+- **Move deleted items to Recycle Bin:** on Android 11+, controls whether the Delete action requests Android Trash/Recycling or Android-confirmed permanent deletion. It is enabled by default. Android owns the destructive confirmation surface in both modes.
 
-The following requested settings are present and persisted now, but their behavioral effect remains gated by unfinished capability work and must not be represented as implemented playback or destructive-media behavior:
+The following requested settings are present and persisted now, but their behavioral effect remains gated by unfinished capability work and must not be represented as implemented playback or cleanup behavior:
 
 - **Play videos automatically** — stored preference; applies when validated native video playback exists.
 - **Loop videos** — stored preference; applies when validated native video playback exists.
 - **Animate GIFs in thumbnails** — stored preference; animated thumbnail decoding is not yet enabled.
-- **Delete empty folders after deleting their content** — stored preference; destructive media workflows are not yet enabled.
-- **Move deleted items to Recycle Bin** — stored preference, enabled by default; applies when the validated Delete/Trash workflow is enabled.
+- **Delete empty folders after deleting their content** — stored preference; automatic empty-folder cleanup is not enabled by the current Android-authorized Delete/Trash slice.
 
 **Password protect photos** is deliberately not implemented as a fake app-local password switch. The Settings row explains that Protected Photos requires a real secure-media implementation using supported Android/GoreeCloud authentication and protected storage, Privacy Shield consent/visibility policy, GoreeCloud Identity where applicable, and Wardveil trust/security boundaries. Until that work is implemented and accepted, the setting is shown as not yet available.
 
@@ -115,7 +118,7 @@ The historical screenshots supplied for the native migration establish the follo
 
 ### Navigation model
 
-- The historical product used clear top-level destinations for media, albums, and video-oriented browsing. The current native implementation may modernize the exact tab labels and placement under Glaze UI 2.1, but it must preserve similarly direct access to the major Gallery domains.
+- The historical product used clear top-level destinations for media, albums, and video-oriented browsing. The current native implementation may modernize exact labels and placement under GLAZE UI V1.0, but it must preserve similarly direct access to the major Gallery domains.
 - Search and contextual actions must be reachable from the relevant browsing surface without forcing users through debug-style filter controls.
 
 ## Established Gallery capabilities to restore in the native replacement
@@ -142,22 +145,24 @@ The exact migration set is governed by historical GoreeCloud Gallery behavior an
 
 ## Development work still required
 
-- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings shell, bounded viewer, and first rendered multi-select tranche.
-- Refine multi-select from physical-device evidence and add approved contextual actions as their authorities become real; destructive/move actions must remain unavailable until their mutation paths are implemented and validated.
+- Continue the mature Samsung Gallery-inspired restoration beyond the current Photos / Albums / Videos / Settings experience, bounded viewer, selection, and Android-authorized Delete/Trash candidate.
+- Physically validate Delete/Trash on representative Android devices with disposable copied media, including single-item viewer deletion, multi-select deletion, cancel behavior, Android Recycle Bin behavior, permanent-delete mode, permission changes, and post-mutation refresh.
+- Add a first-party Trash/Recycle Bin destination with Android-authorized restore and permanent purge where supported; the current candidate can request Trash but does not yet provide Gallery-owned Trash browsing/restore/purge UI.
+- Refine multi-select from physical-device evidence and add approved contextual actions as their authorities become real; Move remains unavailable until its mutation path is implemented and validated.
 - Add richer grouping modes, view-density/layout controls, album creation/rename/reorder, and approved move/copy organization.
 - Complete useful/full-resolution image viewing and native video playback, then connect the saved autoplay/loop preferences to accepted playback behavior.
 - Complete animated GIF thumbnail decoding before treating the saved GIF-animation preference as behaviorally active.
-- Complete approved first-party editing and destructive Delete/Trash/Restore/Purge workflows; do not enable the current disabled viewer/selection actions or deletion-related setting effects until those paths are validated.
+- Complete approved first-party editing.
 - Expand Share/export acceptance beyond the current Android read-only share handoff where needed.
 - Complete secure Private/Protected Photos, hidden/excluded media policy, and password/device-credential protection through supported platform mechanisms.
-- Complete the full Trash/Recycle Bin experience and connect the saved Recycle Bin/delete-empty-folder preferences only after destructive-operation acceptance.
+- Connect automatic empty-folder cleanup only after a safe, evidence-backed implementation exists.
 - Complete Privacy Shield, Wardveil, Everkeep, GoreeCloud Identity, and GoreeCloud Mesh integration where applicable and evidence-backed.
-- Complete TalkBack, switch access, large-text, contrast, reduced-motion/transparency, adaptive-layout, tablet/foldable, and representative-device acceptance.
+- Complete GLAZE UI V1.0 conformance, TalkBack, switch access, large-text, contrast, reduced-motion/transparency, adaptive-layout, tablet/foldable, and representative-device acceptance.
 - Complete signed release packaging, upgrade/recovery acceptance, and Stable qualification.
 
-## Glaze UI modernization requirement
+## GLAZE UI V1.0 modernization requirement
 
-Glaze UI modernization must improve hierarchy, navigation, material, responsive behavior, motion, accessibility, transient surfaces, and visual polish without deleting established Gallery capabilities merely to simplify the interface. Media remains dominant content; interaction chrome may use Glaze material selectively and must preserve Android-native behavior, performance, readability, and accessibility.
+GLAZE UI V1.0 modernization must improve hierarchy, navigation, material, responsive behavior, motion, accessibility, transient surfaces, and visual polish without deleting established Gallery capabilities merely to simplify the interface. Media remains dominant content; interaction chrome may use Glaze material selectively and must preserve Android-native behavior, performance, readability, and accessibility.
 
 A visually polished replacement that omits mature Gallery capabilities is not a successful migration.
 

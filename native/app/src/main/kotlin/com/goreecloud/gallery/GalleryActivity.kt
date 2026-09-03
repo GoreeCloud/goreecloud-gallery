@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -31,6 +32,8 @@ import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
+import com.goreecloud.gallery.android.AndroidMediaMutationMode
+import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.core.GalleryBulkActionPolicy
 import com.goreecloud.gallery.core.GalleryFavoriteBulkAction
@@ -74,6 +77,7 @@ class GalleryActivity : Activity() {
 
     private val favoriteUris = linkedSetOf<String>()
     private val selectedUris = linkedSetOf<String>()
+    private val renderedMediaTiles = linkedMapOf<String, FrameLayout>()
     private var selectionScopeItems: List<MediaItem> = emptyList()
     private var loadGeneration = 0
     private var authorizedItems: List<MediaItem> = emptyList()
@@ -83,6 +87,7 @@ class GalleryActivity : Activity() {
     private var showingFavorites = false
     private var searchQuery = ""
     private var viewerOverlay: View? = null
+    private var pendingMediaMutation: PendingMediaMutation? = null
 
     private val inSelectionMode: Boolean
         get() = selectedUris.isNotEmpty()
@@ -98,7 +103,7 @@ class GalleryActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (viewerOverlay != null) return
+        if (viewerOverlay != null || pendingMediaMutation != null) return
         if (destination == GalleryDestination.SETTINGS) {
             renderCurrentDestination()
         } else {
@@ -106,9 +111,25 @@ class GalleryActivity : Activity() {
         }
     }
 
-    @Deprecated("The Development Gallery uses Android document intents for local import/export portability.")
+    @Deprecated("The Development Gallery uses Android activity results for media mutation confirmation and document portability.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == MEDIA_MUTATION_REQUEST) {
+            val mutation = pendingMediaMutation
+            pendingMediaMutation = null
+            if (resultCode == RESULT_OK && mutation != null) {
+                completeConfirmedMediaMutation(mutation)
+            } else if (mutation != null) {
+                Toast.makeText(
+                    this,
+                    if (mutation.mode == AndroidMediaMutationMode.TRASH) "Move to Recycle Bin canceled" else "Delete canceled",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            return
+        }
+
         if (resultCode != RESULT_OK) return
         val uri = data?.data ?: return
         when (requestCode) {
@@ -513,6 +534,12 @@ class GalleryActivity : Activity() {
             favoriteUris,
         )
         val favoriteLabel = if (favoriteAction == GalleryFavoriteBulkAction.REMOVE) "Unfavorite" else "Favorite"
+        val deleteSupported = AndroidMediaMutationRequests.isSupported()
+        val deletionDescription = when {
+            !deleteSupported -> "Delete requires Android 11 or newer in this Development build"
+            currentUserSettings().moveDeletedItemsToRecycleBin -> "Move selected media to the Android Recycle Bin"
+            else -> "Permanently delete selected media after Android confirmation"
+        }
 
         val actions = listOf(
             selectionAction("Share", selectedItems.isNotEmpty(), "Share selected media") {
@@ -522,7 +549,9 @@ class GalleryActivity : Activity() {
                 applySelectedFavoriteAction()
             },
             selectionAction("Move", false, "Move is unavailable until media mutation is implemented") {},
-            selectionAction("Delete", false, "Delete is unavailable until Trash mutation is implemented") {},
+            selectionAction("Delete", selectedItems.isNotEmpty() && deleteSupported, deletionDescription) {
+                requestMediaDeletion(selectedItems)
+            },
             selectionAction("More", selectedItems.size == 1, "Show details for the selected item") {
                 selectedItems.singleOrNull()?.let(::showItemDetails)
             },
@@ -756,6 +785,7 @@ class GalleryActivity : Activity() {
 
         updateHeader()
         renderNavigation()
+        renderedMediaTiles.clear()
         library.removeAllViews()
 
         if (destination == GalleryDestination.SETTINGS) {
@@ -1108,11 +1138,7 @@ class GalleryActivity : Activity() {
             isLongClickable = true
             isFocusable = true
             isSelected = selected
-            contentDescription = if (inSelectionMode) {
-                "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
-            } else {
-                "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer. Long press to select."
-            }
+            contentDescription = mediaTileContentDescription(item, selected)
             setOnClickListener {
                 if (inSelectionMode) toggleSelection(item, items)
                 else showAuthorizedViewer(items, index, generation)
@@ -1126,15 +1152,15 @@ class GalleryActivity : Activity() {
                 thumbnail,
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
-            if (selected) {
-                addView(
-                    View(context).apply {
-                        background = roundedSurface(withAlpha(accentColor(), 0.20f), cornerDp)
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    },
-                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-                )
-            }
+            addView(
+                View(context).apply {
+                    tag = SELECTION_OVERLAY_TAG
+                    visibility = if (selected) View.VISIBLE else View.GONE
+                    background = roundedSurface(withAlpha(accentColor(), 0.20f), cornerDp)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            )
             if (item.mimeType.startsWith("video/")) {
                 addView(
                     TextView(context).apply {
@@ -1154,24 +1180,46 @@ class GalleryActivity : Activity() {
                     },
                 )
             }
-            if (selected) {
-                addView(
-                    TextView(context).apply {
-                        text = "✓"
-                        gravity = Gravity.CENTER
-                        setTextColor(Color.WHITE)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                        setTypeface(typeface, Typeface.BOLD)
-                        background = roundedSurface(accentColor(), 14)
-                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                    },
-                    FrameLayout.LayoutParams(dp(28), dp(28)).apply {
-                        gravity = Gravity.END or Gravity.TOP
-                        marginEnd = dp(5)
-                        topMargin = dp(5)
-                    },
-                )
-            }
+            addView(
+                TextView(context).apply {
+                    tag = SELECTION_CHECK_TAG
+                    visibility = if (selected) View.VISIBLE else View.GONE
+                    text = "✓"
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTypeface(typeface, Typeface.BOLD)
+                    background = roundedSurface(accentColor(), 14)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                },
+                FrameLayout.LayoutParams(dp(28), dp(28)).apply {
+                    gravity = Gravity.END or Gravity.TOP
+                    marginEnd = dp(5)
+                    topMargin = dp(5)
+                },
+            )
+        }.also { tile ->
+            renderedMediaTiles[item.contentUri] = tile
+        }
+    }
+
+    private fun mediaTileContentDescription(item: MediaItem, selected: Boolean): String =
+        if (inSelectionMode) {
+            "${item.displayName}. ${if (selected) "Selected" else "Not selected"}. Double tap to toggle selection."
+        } else {
+            "${item.displayName}. ${mediaMetadata(item)}. Double tap to open viewer. Long press to select."
+        }
+
+    private fun refreshRenderedSelectionState() {
+        val itemsByUri = selectionScopeItems.associateBy { it.contentUri }
+        renderedMediaTiles.forEach { (contentUri, tile) ->
+            val item = itemsByUri[contentUri] ?: return@forEach
+            val selected = contentUri in selectedUris
+            val selectionVisibility = if (selected) View.VISIBLE else View.GONE
+            tile.isSelected = selected
+            tile.contentDescription = mediaTileContentDescription(item, selected)
+            tile.findViewWithTag<View>(SELECTION_OVERLAY_TAG)?.visibility = selectionVisibility
+            tile.findViewWithTag<View>(SELECTION_CHECK_TAG)?.visibility = selectionVisibility
         }
     }
 
@@ -1196,7 +1244,9 @@ class GalleryActivity : Activity() {
                 if (selectedUris.size == 1) "1 item selected" else "${selectedUris.size} items selected",
             )
         }
-        renderCurrentDestination()
+        refreshRenderedSelectionState()
+        updateHeader()
+        renderNavigation()
     }
 
     private fun clearSelection(render: Boolean = true) {
@@ -1258,6 +1308,95 @@ class GalleryActivity : Activity() {
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         clearSelection()
+    }
+
+    private fun requestMediaDeletion(items: List<MediaItem>) {
+        if (items.isEmpty() || pendingMediaMutation != null) return
+        if (!AndroidMediaMutationRequests.isSupported()) {
+            Toast.makeText(
+                this,
+                "Delete requires Android 11 or newer in this Development build.",
+                Toast.LENGTH_SHORT,
+            ).show()
+            return
+        }
+
+        val mode = if (currentUserSettings().moveDeletedItemsToRecycleBin) {
+            AndroidMediaMutationMode.TRASH
+        } else {
+            AndroidMediaMutationMode.DELETE
+        }
+
+        val request = try {
+            AndroidMediaMutationRequests.create(
+                contentResolver = contentResolver,
+                contentUris = items.map { it.contentUri },
+                mode = mode,
+            )
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Gallery refused an invalid media mutation request.", Toast.LENGTH_SHORT).show()
+            return
+        } catch (_: IllegalStateException) {
+            Toast.makeText(this, "Android media mutation is unavailable on this device.", Toast.LENGTH_SHORT).show()
+            return
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "Android denied the media mutation request.", Toast.LENGTH_SHORT).show()
+            return
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "The Android media provider could not prepare this request.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        pendingMediaMutation = PendingMediaMutation(
+            mode = request.mode,
+            contentUris = request.contentUris.toSet(),
+        )
+        try {
+            startIntentSenderForResult(
+                request.pendingIntent.intentSender,
+                MEDIA_MUTATION_REQUEST,
+                null,
+                0,
+                0,
+                0,
+            )
+        } catch (_: IntentSender.SendIntentException) {
+            pendingMediaMutation = null
+            Toast.makeText(this, "Android could not open the media confirmation.", Toast.LENGTH_SHORT).show()
+        } catch (_: RuntimeException) {
+            pendingMediaMutation = null
+            Toast.makeText(this, "Android could not open the media confirmation.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun completeConfirmedMediaMutation(mutation: PendingMediaMutation) {
+        if (mutation.mode == AndroidMediaMutationMode.DELETE) {
+            favoriteUris.removeAll(mutation.contentUris)
+            persistFavorites()
+        }
+
+        viewerOverlay?.let { rootFrame.removeView(it) }
+        viewerOverlay = null
+        clearSelection(render = false)
+        thumbnailCache.evictAll()
+        applySystemChrome()
+
+        Toast.makeText(
+            this,
+            if (mutation.mode == AndroidMediaMutationMode.TRASH) {
+                if (mutation.contentUris.size == 1) "Moved to Recycle Bin" else "Moved ${mutation.contentUris.size} items to Recycle Bin"
+            } else {
+                if (mutation.contentUris.size == 1) "Deleted permanently" else "Deleted ${mutation.contentUris.size} items permanently"
+            },
+            Toast.LENGTH_SHORT,
+        ).show()
+
+        val accessScope = currentMediaAccessScope()
+        if (GalleryMediaAccessPolicy.canRead(accessScope)) {
+            loadLocalLibrary(accessScope)
+        } else {
+            renderPermissionState()
+        }
     }
 
     private fun showAuthorizedViewer(items: List<MediaItem>, initialIndex: Int, generation: Int) {
@@ -1368,7 +1507,16 @@ class GalleryActivity : Activity() {
         val share = viewerAction("Share", true, "Share this media") {}
         val favorite = viewerAction("Favorite", true, "Favorite this media") {}
         val edit = viewerAction("Edit", false, "Edit is unavailable in this Development build") {}
-        val delete = viewerAction("Delete", false, "Delete is unavailable in this Development build") {}
+        val deleteSupported = AndroidMediaMutationRequests.isSupported()
+        val delete = viewerAction(
+            "Delete",
+            deleteSupported,
+            when {
+                !deleteSupported -> "Delete requires Android 11 or newer in this Development build"
+                currentUserSettings().moveDeletedItemsToRecycleBin -> "Move this media to the Android Recycle Bin"
+                else -> "Permanently delete this media after Android confirmation"
+            },
+        ) {}
         val more = viewerAction("More", true, "Show media details") {}
 
         listOf(share, favorite, edit, delete, more).forEachIndexed { index, item ->
@@ -1437,6 +1585,12 @@ class GalleryActivity : Activity() {
             val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
             toggleFavorite(item)
             renderCurrentItem()
+        }
+        if (deleteSupported) {
+            delete.setOnClickListener {
+                val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
+                requestMediaDeletion(listOf(item))
+            }
         }
         more.setOnClickListener {
             val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
@@ -1578,14 +1732,18 @@ class GalleryActivity : Activity() {
         library.addView(
             settingToggleRow(
                 title = "Delete empty folders after deleting their content",
-                subtitle = "Preference is saved now; approved destructive media workflows are not enabled in this Development build.",
+                subtitle = "Preference is saved; automatic empty-folder cleanup remains separately gated.",
                 checked = settings.deleteEmptyFolders,
             ) { setBooleanSetting(DELETE_EMPTY_FOLDERS_KEY, it) },
         )
         library.addView(
             settingToggleRow(
                 title = "Move deleted items to Recycle Bin",
-                subtitle = "Enabled by default. Preference applies when the approved Delete/Trash workflow is enabled.",
+                subtitle = if (AndroidMediaMutationRequests.isSupported()) {
+                    "When on, Delete uses Android's Recycle Bin confirmation. When off, Android confirms permanent deletion."
+                } else {
+                    "Saved preference. Android-authorized Trash/Delete requires Android 11 or newer in this Development build."
+                },
                 checked = settings.moveDeletedItemsToRecycleBin,
             ) { setBooleanSetting(MOVE_DELETED_TO_RECYCLE_BIN_KEY, it) },
         )
@@ -2458,6 +2616,11 @@ class GalleryActivity : Activity() {
         val isFavorites: Boolean,
     )
 
+    private data class PendingMediaMutation(
+        val mode: AndroidMediaMutationMode,
+        val contentUris: Set<String>,
+    )
+
     private enum class GalleryDestination {
         PHOTOS,
         ALBUMS,
@@ -2467,6 +2630,7 @@ class GalleryActivity : Activity() {
 
     private companion object {
         const val MEDIA_PERMISSION_REQUEST = 4101
+        const val MEDIA_MUTATION_REQUEST = 4102
         const val EXPORT_FAVORITES_REQUEST = 4201
         const val IMPORT_FAVORITES_REQUEST = 4202
         const val EXPORT_SETTINGS_REQUEST = 4203
@@ -2483,6 +2647,8 @@ class GalleryActivity : Activity() {
         const val GRID_THUMBNAIL_NAMESPACE = "grid"
         const val ALBUM_THUMBNAIL_NAMESPACE = "album"
         const val VIEWER_THUMBNAIL_NAMESPACE = "viewer"
+        const val SELECTION_OVERLAY_TAG = "goreecloud_gallery_selection_overlay"
+        const val SELECTION_CHECK_TAG = "goreecloud_gallery_selection_check"
 
         const val LOCAL_STATE_PREFERENCES = "goreecloud_gallery_local_state"
         const val FAVORITES_KEY = "favorite_content_uris"
