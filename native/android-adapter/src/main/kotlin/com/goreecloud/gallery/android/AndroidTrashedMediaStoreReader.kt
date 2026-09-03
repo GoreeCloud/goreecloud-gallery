@@ -19,9 +19,6 @@ import com.goreecloud.gallery.core.MediaStoreRow
 class AndroidTrashedMediaStoreReader(
     private val contentResolver: ContentResolver,
 ) {
-    fun isSupported(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
-        apiLevel >= MIN_SUPPORTED_API
-
     fun readLatest(maxRows: Int = DEFAULT_MAX_ROWS): AndroidMediaStoreReadResult {
         check(isSupported()) {
             "Android MediaStore Trash browsing requires Android 11 or newer"
@@ -123,10 +120,13 @@ class AndroidTrashedMediaStoreReader(
         }
     }
 
-    private companion object {
+    companion object {
         const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
         const val DEFAULT_MAX_ROWS = 250
         const val MAX_ROWS = 500
+
+        fun isSupported(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
+            apiLevel >= MIN_SUPPORTED_API
     }
 }
 
