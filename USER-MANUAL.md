@@ -2,7 +2,7 @@
 
 ## Status
 
-This manual describes the **current first-party native Development experience**, including the physically verified `0.6.2-dev` Android Trash/selection base and the new `0.7.0-dev` Recycle Bin browser candidate. It does not describe a Stable or production-approved release.
+This manual describes the **current first-party native Development experience**, including the physically verified `0.6.2-dev` Android Trash/selection base and the `0.7.1-dev` Recycle Bin integration candidate. It does not describe a Stable or production-approved release.
 
 The initial `0.6.0-dev` destructive-operation build is superseded. `0.6.1-dev` corrected the MediaStore item URI path, and representative-device testing subsequently verified single-item Trash plus tested 26-item and 10-item multi-select Trash operations. `0.6.2-dev` also physically corrected the prior select/deselect screen flash.
 
@@ -22,7 +22,7 @@ On supported Android versions, the app may operate with selected-media access ra
 The current native Development experience provides direct **Photos**, **Albums**, **Videos**, and **Settings** destinations.
 
 - Photos and Videos use dense local thumbnail grids grouped by Today, Yesterday, or calendar date.
-- Albums uses Android-authorized album metadata and includes a device-local Favorites collection when Favorites exist.
+- Albums uses Android-authorized album metadata, includes a device-local Favorites collection when Favorites exist, and on Android 11+ exposes **Recycle Bin** under a dedicated **Recovery** section.
 - Search and Newest/Oldest ordering operate only over the currently authorized local snapshot.
 - Long-press a media tile to enter multi-select mode.
 
@@ -57,13 +57,17 @@ Android 10 remains fail-closed for this path; no legacy direct-delete workaround
 
 A single mutation is bounded to at most 100 unique Android MediaStore image/video item URIs. Gallery rejects blank, malformed, file, network, non-MediaStore, generic MediaStore Files, collection-only, and nonnumeric-item targets at the mutation adapter boundary.
 
-## Recycle Bin — 0.7.0-dev Development candidate
+## Recycle Bin — 0.7.1-dev Development candidate
 
-The `0.7.0-dev` candidate adds the first rendered **Gallery Recycle Bin** browser backed by Android MediaStore Trash.
+The `0.7.1-dev` candidate integrates the first-party **Recycle Bin** into normal Gallery navigation while keeping Android MediaStore as the authoritative Trash state.
 
-### Opening the Recycle Bin in this test tranche
+### Opening the Recycle Bin
 
-For initial physical Restore/Purge testing, Android exposes a second launcher entry named **Gallery Recycle Bin** from the same GoreeCloud Gallery application package. This is a temporary Development test entry point. It is not the final product navigation design; after the feature is physically accepted, Recycle Bin should be integrated into the normal Albums/appropriate Gallery navigation and the temporary launcher entry removed.
+1. Launch **GoreeCloud Gallery**.
+2. Open **Albums**.
+3. Under **Recovery**, choose **Recycle Bin**.
+
+The temporary second launcher icon used by the first `0.7.0-dev` Restore/Purge test slice has been removed. `RecycleBinActivity` is now internal to the application and normal Gallery is the sole launcher entry.
 
 ### What the Recycle Bin shows
 
@@ -72,11 +76,22 @@ For initial physical Restore/Purge testing, Android exposes a second launcher en
 - An explicit notice that **Android controls Trash retention and expiration**. Gallery does not promise indefinite retention.
 - Empty, unavailable, media-access-required, and provider-failure states.
 
-Ordinary Photos/Albums/Videos queries continue to exclude trashed items by default.
+Ordinary Photos/Albums/Videos media queries continue to exclude trashed items by default.
+
+### Recycle Bin viewer
+
+When no selection is active, tap a visible trashed-media tile to open the Recycle Bin viewer.
+
+- Use **Previous** and **Next** across the currently loaded trashed-media collection.
+- **Restore** asks Android to restore the current item from Trash.
+- **Delete permanently** asks Android to permanently delete the current trashed item.
+- **More** shows the available media details and explicitly identifies the item as being in Android Recycle Bin state.
+
+The viewer uses a larger bounded local thumbnail request for inspection. It is not a claim of accepted full-resolution photo viewing or native video playback.
 
 ### Selecting trashed items
 
-Tap or long-press a visible Recycle Bin tile to select it. Selection updates in place. The current action surface provides:
+Long-press a visible Recycle Bin tile to enter selection mode, then tap additional items to toggle them. Selection updates resident tiles in place. The current action surface provides:
 
 - **Select all** — select the currently loaded trashed items.
 - **Restore** — ask Android to restore the selected items from Trash.
@@ -86,19 +101,19 @@ Tap or long-press a visible Recycle Bin tile to select it. Selection updates in 
 ### Restore
 
 1. Put a **disposable copied** photo/video into Trash using normal Gallery Delete with Recycle Bin enabled.
-2. Open **Gallery Recycle Bin**.
+2. Open **Albums > Recovery > Recycle Bin**.
 3. Confirm that the trashed item appears.
-4. Select the item and choose **Restore**.
+4. Either open the item and choose **Restore**, or long-press/select it and choose **Restore** from the selection action surface.
 5. Android should display its system-owned restore confirmation.
 6. Approve only the disposable test item.
 7. Gallery should refresh the Recycle Bin after Android reports success.
-8. Reopen the ordinary Gallery and verify the restored item returns to the authorized library.
+8. Return to the ordinary Gallery and verify the restored item returns to the authorized library.
 
 Restore deliberately preserves Gallery Favorite URI metadata so a restored favorite can remain a favorite when Android retains the same item identity.
 
 ### Permanent purge
 
-1. Select only disposable trashed media.
+1. Open or select only disposable trashed media.
 2. Choose **Delete permanently**.
 3. Android should display its system-owned permanent-delete confirmation.
 4. Approve only when you intend to permanently remove the test media.
@@ -108,11 +123,11 @@ Confirmed purge removes stale Gallery Favorite URI references for those items.
 
 ### Cancel behavior
 
-Canceling Android's Restore or permanent-delete confirmation must not be treated as success. The selected media should remain in the Recycle Bin unless Android or another application changed it independently.
+Canceling Android's Restore or permanent-delete confirmation must not be treated as success. The media should remain in the Recycle Bin unless Android or another application changed it independently. If cancellation occurs from the viewer, the viewer remains available for the current item.
 
 ### Recycle Bin acceptance boundary
 
-The rendered `0.7.0-dev` Recycle Bin is a Development candidate. Source/build validation does not establish physical Restore/Purge correctness. Required device testing includes single-item and multi-item Restore/Purge, cancellation, mixed photo/video behavior, partial-media permission behavior, permission revocation, empty state, provider failure, restart/process recreation, and retention/expiry refresh.
+The rendered `0.7.1-dev` Recycle Bin is a Development candidate. Source/build validation does not establish physical Restore/Purge correctness. Required device testing includes single-item and multi-item Restore/Purge, viewer and selection paths, cancellation, mixed photo/video behavior, partial-media permission behavior, permission revocation, empty state, provider failure, restart/process recreation, and retention/expiry refresh.
 
 ## Settings
 
@@ -129,17 +144,18 @@ Protected Photos/password protection is not simulated with insecure app-local cr
 - Android MediaStore remains the authoritative Trash state; Gallery does not maintain a second deleted-item database.
 - Trash, Restore, and permanent-delete requests are restricted to media-specific MediaStore item URIs and Android owns the final confirmation surface.
 - Selection itself never grants filesystem or media-write authority.
+- Recycle Bin integration does not request `MANAGE_MEDIA`, `MANAGE_EXTERNAL_STORAGE`, network media authority, or cross-profile access.
 - Optional GoreeCloud Photos integration remains a future user-controlled adapter milestone, not a dependency of the current local library.
 
 ## Current design-system authority
 
-Current active GoreeCloud policy identifies **GLAZE UI V1.1 / 1.1.0** as the official design-system identity. Gallery's repository-local source contract is aligned to that identity in the `0.7.0-dev` tranche. Complete rendered, accessibility, adaptive-device, Human Visual Excellence, and production conformance remain separate acceptance gates.
+The authoritative **Project Specification — Gallery** identifies **GLAZE UI V1.0 / 1.0.0** as Gallery's current application target. Gallery's repository-local source contract follows that product-specific authority. Broader GoreeCloud Glaze records currently contain a conflicting V1.1 statement; that discrepancy is not treated as permission to silently change Gallery's target. Complete rendered, accessibility, adaptive-device, Human Visual Excellence, and production conformance remain separate acceptance gates.
 
 ## Major capability backlog
 
-The native restoration still includes more work than the earlier rough "11 features" estimate implied. Distinct remaining capability areas include final in-app Recycle Bin integration; full-resolution image viewing and physical orientation acceptance; native video playback plus autoplay/loop behavior; animated GIF behavior; approved photo/video editing; approved metadata editing; Move and Copy; rendered Select-all and broader selection tools where appropriate; album creation, rename, reorder and richer album actions; richer grouping/timeline modes; view-density/layout controls; slideshow and other established local presentation actions; broader contextual/overflow actions; broader export/share workflows where required; secure Private/Protected Photos; fuller hidden/sensitive-media policy; automatic empty-folder cleanup; and any additional established first-party Gallery capability verified by historical GoreeCloud Gallery evidence.
+The native restoration still includes more work than the earlier rough "11 features" estimate implied. Distinct remaining capability areas include full physical Recycle Bin acceptance; full-resolution image viewing and physical orientation acceptance; native video playback plus autoplay/loop behavior; animated GIF behavior; approved photo/video editing; approved metadata editing; Move and Copy; broader selection tools where appropriate; album creation, rename, reorder and richer album actions; richer grouping/timeline modes; view-density/layout controls; slideshow and other established local presentation actions; broader contextual/overflow actions; broader export/share workflows where required; secure Private/Protected Photos; fuller hidden/sensitive-media policy; automatic empty-folder cleanup; and any additional established first-party Gallery capability verified by historical GoreeCloud Gallery evidence.
 
-Separate release gates include GLAZE UI V1.1 application acceptance, accessibility/adaptive/OEM/profile testing, Privacy Shield/Wardveil/Everkeep/Identity/Mesh integration where applicable, long-lived signing, upgrade/recovery validation, production approval, and Stable qualification.
+Separate release gates include GLAZE UI V1.0 application acceptance, accessibility/adaptive/OEM/profile testing, Privacy Shield/Wardveil/Everkeep/Identity/Mesh integration where applicable, long-lived signing, upgrade/recovery validation, production approval, and Stable qualification.
 
 ## Troubleshooting
 
@@ -149,8 +165,8 @@ Separate release gates include GLAZE UI V1.1 application acceptance, accessibili
 
 **Delete is disabled:** the current Development path requires Android 11 or newer and a currently selected/presented authorized media item.
 
-**The ordinary Gallery no longer shows an item after Trash:** open the Development **Gallery Recycle Bin** entry in `0.7.0-dev` to check Android MediaStore Trash.
+**The ordinary Gallery no longer shows an item after Trash:** open **Albums > Recovery > Recycle Bin** to check Android MediaStore Trash.
 
-**The Recycle Bin says media access is required:** open ordinary GoreeCloud Gallery first and grant the Android media scope you intend Gallery to use.
+**The Recycle Bin says media access is required:** return to ordinary GoreeCloud Gallery and grant the Android media scope you intend Gallery to use.
 
 **Android confirmation does not open:** Gallery must not claim success. Stop that Restore/Delete test and report the exact feedback.
