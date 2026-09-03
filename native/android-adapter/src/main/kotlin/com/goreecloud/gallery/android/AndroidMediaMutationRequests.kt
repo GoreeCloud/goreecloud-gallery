@@ -8,14 +8,15 @@ import android.provider.MediaStore
 import java.net.URI
 
 /**
- * Creates Android-owned confirmation requests for destructive MediaStore operations.
+ * Creates Android-owned confirmation requests for MediaStore trash/recovery/destructive operations.
  *
  * GoreeCloud Gallery never turns a rendered/selected item into direct filesystem authority.
  * Only bounded MediaStore image/video item URIs from the current authorized presentation scope may
- * reach this boundary, and Android remains responsible for the destructive confirmation UI.
+ * reach this boundary, and Android remains responsible for the final confirmation UI.
  */
 enum class AndroidMediaMutationMode {
     TRASH,
+    RESTORE,
     DELETE,
 }
 
@@ -38,7 +39,7 @@ object AndroidMediaMutationRequests {
         mode: AndroidMediaMutationMode,
     ): AndroidMediaMutationRequest {
         check(isSupported()) {
-            "Android-authorized trash/delete requests require Android 11 or newer"
+            "Android-authorized trash/restore/delete requests require Android 11 or newer"
         }
 
         val normalizedUris = normalizeMediaStoreUris(contentUris)
@@ -46,6 +47,8 @@ object AndroidMediaMutationRequests {
         val pendingIntent = when (mode) {
             AndroidMediaMutationMode.TRASH ->
                 MediaStore.createTrashRequest(contentResolver, androidUris, true)
+            AndroidMediaMutationMode.RESTORE ->
+                MediaStore.createTrashRequest(contentResolver, androidUris, false)
             AndroidMediaMutationMode.DELETE ->
                 MediaStore.createDeleteRequest(contentResolver, androidUris)
         }
