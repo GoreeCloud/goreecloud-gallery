@@ -38,18 +38,23 @@ object AndroidMediaStoreProjection {
  * Projects rows discovered through MediaStore.Files onto the media-specific item collections that
  * Android's write/trash/delete request APIs accept. Browsing can remain a single bounded Files
  * query, while MediaItem content URIs retain their canonical image/video identity.
+ *
+ * The projection itself is deliberately pure so local JVM tests can validate URI identity without
+ * depending on Android framework method execution. Runtime provider access remains Android-owned.
  */
 internal object AndroidMediaStoreItemUris {
     fun collectionUriForMimeType(volumeName: String, mimeType: String): String {
-        require(volumeName.isNotBlank()) { "MediaStore volume name is required" }
+        val normalizedVolume = volumeName.trim()
+        require(normalizedVolume.isNotEmpty()) { "MediaStore volume name is required" }
+        require('/' !in normalizedVolume) { "MediaStore volume name must not contain a path separator" }
+
         val normalizedMimeType = mimeType.trim().lowercase()
-        return when {
-            normalizedMimeType.startsWith("image/") ->
-                MediaStore.Images.Media.getContentUri(volumeName).toString()
-            normalizedMimeType.startsWith("video/") ->
-                MediaStore.Video.Media.getContentUri(volumeName).toString()
+        val collectionPath = when {
+            normalizedMimeType.startsWith("image/") -> "images/media"
+            normalizedMimeType.startsWith("video/") -> "video/media"
             else -> throw IllegalArgumentException("MediaStore row must be image or video content")
         }
+        return "content://${MediaStore.AUTHORITY}/$normalizedVolume/$collectionPath"
     }
 }
 
