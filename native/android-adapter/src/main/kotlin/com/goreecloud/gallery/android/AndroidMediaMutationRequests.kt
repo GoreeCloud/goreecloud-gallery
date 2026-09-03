@@ -11,7 +11,7 @@ import java.net.URI
  * Creates Android-owned confirmation requests for destructive MediaStore operations.
  *
  * GoreeCloud Gallery never turns a rendered/selected item into direct filesystem authority.
- * Only bounded MediaStore content URIs from the current authorized presentation scope may
+ * Only bounded MediaStore image/video item URIs from the current authorized presentation scope may
  * reach this boundary, and Android remains responsible for the destructive confirmation UI.
  */
 enum class AndroidMediaMutationMode {
@@ -72,6 +72,7 @@ object AndroidMediaMutationRequests {
             require(parsed.authority == MediaStore.AUTHORITY) {
                 "only Android MediaStore URIs may be mutated"
             }
+            requireSpecificImageOrVideoItem(parsed)
             normalized += value
         }
 
@@ -79,5 +80,26 @@ object AndroidMediaMutationRequests {
             "a single media mutation is limited to $MAX_MUTATION_ITEMS items"
         }
         return normalized.toList()
+    }
+
+    private fun requireSpecificImageOrVideoItem(uri: URI) {
+        val segments = uri.path
+            ?.split('/')
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        require(segments.size == 4) {
+            "MediaStore mutation URI must reference one specific media item"
+        }
+        require(segments[0].isNotBlank()) { "MediaStore volume is required" }
+        require(segments[1] == "images" || segments[1] == "video") {
+            "Gallery mutations require an image or video MediaStore item URI"
+        }
+        require(segments[2] == "media") {
+            "MediaStore mutation URI must reference the media item collection"
+        }
+        val itemId = segments[3].toLongOrNull()
+        require(itemId != null && itemId >= 0) {
+            "MediaStore mutation URI must reference an item by numeric ID"
+        }
     }
 }
