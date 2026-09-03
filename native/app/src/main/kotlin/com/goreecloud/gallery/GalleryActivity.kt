@@ -35,6 +35,7 @@ import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaMutationMode
 import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
+import com.goreecloud.gallery.android.AndroidTrashedMediaStoreReader
 import com.goreecloud.gallery.core.GalleryBulkActionPolicy
 import com.goreecloud.gallery.core.GalleryFavoriteBulkAction
 import com.goreecloud.gallery.core.GallerySelectionPolicy
@@ -638,7 +639,8 @@ class GalleryActivity : Activity() {
             destination == GalleryDestination.ALBUMS -> {
                 val albumCount = visibleItems.buildAlbumCatalog().size
                 val favoriteSuffix = if (favoriteUris.any { uri -> visibleItems.any { it.contentUri == uri } }) 1 else 0
-                val totalCollections = albumCount + favoriteSuffix
+                val recycleBinSuffix = if (AndroidTrashedMediaStoreReader.isSupported()) 1 else 0
+                val totalCollections = albumCount + favoriteSuffix + recycleBinSuffix
                 if (totalCollections == 1) "1 collection" else "$totalCollections collections"
             }
             else -> ""
@@ -931,8 +933,10 @@ class GalleryActivity : Activity() {
 
         val showFavoritesTile = favoriteItems.isNotEmpty() &&
             (query.isBlank() || "favorites".contains(query))
+        val showRecycleBinTile = AndroidTrashedMediaStoreReader.isSupported() &&
+            (query.isBlank() || "recycle bin".contains(query) || "trash".contains(query))
 
-        if (catalog.isEmpty() && !showFavoritesTile) {
+        if (catalog.isEmpty() && !showFavoritesTile && !showRecycleBinTile) {
             library.addView(
                 emptyState(
                     if (searchQuery.isBlank()) "No albums yet" else "No album results",
@@ -948,32 +952,107 @@ class GalleryActivity : Activity() {
             return
         }
 
-        library.addView(sectionHeader("Collections"))
-
-        val tiles = mutableListOf<AlbumPresentation>()
-        if (showFavoritesTile) {
-            tiles += AlbumPresentation(
-                id = null,
-                name = "Favorites",
-                count = favoriteItems.size,
-                cover = favoriteItems.first(),
-                isFavorites = true,
-            )
-        }
-        catalog.forEach { album ->
-            val cover = sourceItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
-            tiles += AlbumPresentation(
-                id = album.id,
-                name = album.displayName,
-                count = album.itemCount,
-                cover = cover,
-                isFavorites = false,
-            )
+        if (showRecycleBinTile) {
+            library.addView(sectionHeader("Recovery"))
+            library.addView(recycleBinCollectionRow())
         }
 
-        renderAlbumGrid(tiles, generation)
+        if (catalog.isNotEmpty() || showFavoritesTile) {
+            library.addView(sectionHeader("Collections"))
+
+            val tiles = mutableListOf<AlbumPresentation>()
+            if (showFavoritesTile) {
+                tiles += AlbumPresentation(
+                    id = null,
+                    name = "Favorites",
+                    count = favoriteItems.size,
+                    cover = favoriteItems.first(),
+                    isFavorites = true,
+                )
+            }
+            catalog.forEach { album ->
+                val cover = sourceItems.firstOrNull { it.id == album.coverItemId } ?: return@forEach
+                tiles += AlbumPresentation(
+                    id = album.id,
+                    name = album.displayName,
+                    count = album.itemCount,
+                    cover = cover,
+                    isFavorites = false,
+                )
+            }
+
+            renderAlbumGrid(tiles, generation)
+        }
         updateHeader()
         renderNavigation()
+    }
+
+    private fun recycleBinCollectionRow(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = dp(76)
+        setPadding(dp(14), dp(10), dp(12), dp(10))
+        background = roundedSurface(
+            withAlpha(primaryTextColor(), if (isNightMode()) 0.10f else 0.045f),
+            18,
+        )
+        isClickable = true
+        isFocusable = true
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        contentDescription = "Recycle Bin. Browse recently deleted photos and videos. Android controls retention and confirmation."
+        setOnClickListener {
+            clearSelection(render = false)
+            searchQuery = ""
+            if (::searchField.isInitialized) searchField.setText("")
+            closeSearch(clearQuery = false)
+            try {
+                startActivity(Intent(this@GalleryActivity, RecycleBinActivity::class.java))
+            } catch (_: RuntimeException) {
+                Toast.makeText(this@GalleryActivity, "Recycle Bin is unavailable right now.", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        addView(
+            TextView(context).apply {
+                text = "↻"
+                gravity = Gravity.CENTER
+                setTextColor(accentColor())
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+                setTypeface(typeface, Typeface.BOLD)
+                background = roundedSurface(withAlpha(accentColor(), 0.12f), 18)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            },
+            LinearLayout.LayoutParams(dp(52), dp(52)),
+        )
+
+        addView(
+            LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(8), 0)
+                addView(TextView(context).apply {
+                    text = "Recycle Bin"
+                    setTextColor(primaryTextColor())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setTypeface(typeface, Typeface.BOLD)
+                })
+                addView(TextView(context).apply {
+                    text = "Restore or permanently delete Android-trashed media"
+                    setTextColor(secondaryTextColor())
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    setPadding(0, dp(2), 0, 0)
+                })
+            },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+
+        addView(TextView(context).apply {
+            text = "›"
+            gravity = Gravity.CENTER
+            setTextColor(secondaryTextColor())
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(36), dp(48)))
     }
 
     private fun renderAlbumGrid(albums: List<AlbumPresentation>, generation: Int) {
