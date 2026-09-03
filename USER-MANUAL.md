@@ -127,7 +127,7 @@ Canceling Android's Restore or permanent-delete confirmation must not be treated
 
 ### Recycle Bin acceptance boundary
 
-The rendered `0.7.1-dev` Recycle Bin is a Development candidate. Source/build validation does not establish physical Restore/Purge correctness. Required device testing includes single-item and multi-item Restore/Purge, viewer and selection paths, cancellation, mixed photo/video behavior, partial-media permission behavior, permission revocation, empty state, provider failure, restart/process recreation, and retention/expiry refresh.
+The rendered `0.7.1-dev` Recycle Bin remains a Development candidate, but representative-device testing now verifies the integrated Albums entry, Trash-to-bin visibility, populated Recycle Bin browsing, stable in-place selection, Android-owned Restore and permanent-delete confirmation surfaces, denial/cancellation for both recovery mutations, successful permanent purge of 28 selected photos, and the post-purge empty-bin state. In the 28-photo purge test, Android presented its system-owned confirmation, Gallery reported `Deleted 28 items permanently`, refreshed the Recycle Bin to 0 items, and rendered the intended `Recycle Bin is empty` state. Remaining required device testing includes mixed photo/video behavior, partial-media permission behavior, permission revocation, provider failure, restart/process recreation, OEM/profile behavior, and retention/expiry refresh. This evidence does not establish Stable or production acceptance.
 
 ## Settings
 
