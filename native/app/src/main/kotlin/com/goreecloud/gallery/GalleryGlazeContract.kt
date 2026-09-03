@@ -1,11 +1,11 @@
 package com.goreecloud.gallery
 
 /**
- * Repository-local Glaze UI 2.1 source contract consumed by the first-party native Gallery shell.
+ * Repository-local GLAZE UI V1.1 source contract consumed by the first-party native Gallery shell.
  * Rendered accessibility and representative-device acceptance remain separate release gates.
  */
 object GalleryGlazeContract {
-    const val VERSION = "2.1.0"
+    const val VERSION = "1.1.0"
     const val GENERAL_TARGET_DP = 48
     const val MAX_RENDERED_MEDIA_ROWS = 100
     const val MIN_GRID_TILE_DP = 78
