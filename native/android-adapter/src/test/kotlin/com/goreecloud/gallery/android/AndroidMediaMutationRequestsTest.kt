@@ -60,11 +60,15 @@ class AndroidMediaMutationRequestsTest {
     }
 
     @Test
-    fun `normalization rejects non numeric media item ids`() {
-        assertFailsWith<IllegalArgumentException> {
-            AndroidMediaMutationRequests.normalizeMediaStoreUris(
-                listOf("content://media/external/images/media/not-an-id"),
-            )
+    fun `normalization rejects non positive and non numeric media item ids`() {
+        listOf(
+            "content://media/external/images/media/0",
+            "content://media/external/images/media/-1",
+            "content://media/external/images/media/not-an-id",
+        ).forEach { uri ->
+            assertFailsWith<IllegalArgumentException> {
+                AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(uri))
+            }
         }
     }
 
@@ -74,6 +78,20 @@ class AndroidMediaMutationRequestsTest {
             AndroidMediaMutationRequests.normalizeMediaStoreUris(
                 listOf("content://example.provider/photos/1"),
             )
+        }
+    }
+
+    @Test
+    fun `normalization rejects non canonical MediaStore item uris`() {
+        listOf(
+            "content://media/external/images/media/42?include_pending=1",
+            "content://media/external/images/media/42#fragment",
+            "content://user@media/external/images/media/42",
+            "content://media:80/external/images/media/42",
+        ).forEach { uri ->
+            assertFailsWith<IllegalArgumentException> {
+                AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(uri))
+            }
         }
     }
 
