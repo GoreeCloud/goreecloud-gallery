@@ -75,6 +75,12 @@ object AndroidMediaMutationRequests {
             require(parsed.authority == MediaStore.AUTHORITY) {
                 "only Android MediaStore URIs may be mutated"
             }
+            require(parsed.rawQuery == null && parsed.rawFragment == null) {
+                "MediaStore mutation URIs must not include query parameters or fragments"
+            }
+            require(parsed.userInfo == null && parsed.port == -1) {
+                "MediaStore mutation URIs must use the canonical content authority form"
+            }
             requireSpecificImageOrVideoItem(parsed)
             normalized += value
         }
@@ -101,8 +107,8 @@ object AndroidMediaMutationRequests {
             "MediaStore mutation URI must reference the media item collection"
         }
         val itemId = segments[3].toLongOrNull()
-        require(itemId != null && itemId >= 0) {
-            "MediaStore mutation URI must reference an item by numeric ID"
+        require(itemId != null && itemId > 0) {
+            "MediaStore mutation URI must reference a positive numeric item ID"
         }
     }
 }
