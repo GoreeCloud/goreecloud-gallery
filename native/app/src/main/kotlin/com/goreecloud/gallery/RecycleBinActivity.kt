@@ -29,6 +29,8 @@ import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaMutationMode
+import com.goreecloud.gallery.android.AndroidMediaMutationPendingState
+import com.goreecloud.gallery.android.AndroidMediaMutationPendingStates
 import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import com.goreecloud.gallery.android.AndroidTrashedMediaStoreReader
 import com.goreecloud.gallery.core.GallerySelectionPolicy
@@ -57,7 +59,7 @@ class RecycleBinActivity : Activity() {
     private var trashedItems: List<MediaItem> = emptyList()
     private val selectedUris = linkedSetOf<String>()
     private val renderedTiles = linkedMapOf<String, FrameLayout>()
-    private var pendingMutation: PendingRecycleMutation? = null
+    private var pendingMutation: AndroidMediaMutationPendingState? = null
     private var viewerOverlay: View? = null
 
     private val thumbnailExecutor: ExecutorService = Executors.newFixedThreadPool(2)
@@ -67,7 +69,22 @@ class RecycleBinActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingMutation = restorePendingMutation(savedInstanceState)
         buildSurface()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        pendingMutation?.let { mutation ->
+            outState.putString(
+                STATE_PENDING_MUTATION_MODE,
+                AndroidMediaMutationPendingStates.modeName(mutation),
+            )
+            outState.putStringArray(
+                STATE_PENDING_MUTATION_URIS,
+                AndroidMediaMutationPendingStates.contentUriValues(mutation),
+            )
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
@@ -107,7 +124,7 @@ class RecycleBinActivity : Activity() {
 
         if (resultCode == RESULT_OK) {
             if (mutation.mode == AndroidMediaMutationMode.DELETE) {
-                removePurgedFavorites(mutation.contentUris)
+                removePurgedFavorites(mutation.contentUris.toSet())
             }
             selectedUris.clear()
             thumbnailCache.evictAll()
@@ -133,6 +150,19 @@ class RecycleBinActivity : Activity() {
                 Toast.LENGTH_SHORT,
             ).show()
             if (viewerOverlay == null) renderSelectionState()
+        }
+    }
+
+    private fun restorePendingMutation(savedInstanceState: Bundle?): AndroidMediaMutationPendingState? {
+        val restored = AndroidMediaMutationPendingStates.restore(
+            modeName = savedInstanceState?.getString(STATE_PENDING_MUTATION_MODE),
+            contentUris = savedInstanceState?.getStringArray(STATE_PENDING_MUTATION_URIS)?.asList(),
+        ) ?: return null
+
+        // This Activity can only originate Restore or permanent Delete requests for already-trashed
+        // media. Never let restored Bundle state manufacture ordinary Trash authority here.
+        return restored.takeIf {
+            it.mode == AndroidMediaMutationMode.RESTORE || it.mode == AndroidMediaMutationMode.DELETE
         }
     }
 
@@ -657,7 +687,6 @@ class RecycleBinActivity : Activity() {
         if (pendingMutation != null) return
         val selectedItems = explicitItems ?: GallerySelectionPolicy.resolve(trashedItems, selectedUris)
         if (selectedItems.isEmpty()) return
-
         val request = try {
             AndroidMediaMutationRequests.create(
                 contentResolver = contentResolver,
@@ -678,7 +707,12 @@ class RecycleBinActivity : Activity() {
             return
         }
 
-        pendingMutation = PendingRecycleMutation(request.mode, request.contentUris.toSet())
+        pendingMutation = try {
+            AndroidMediaMutationPendingStates.capture(request.mode, request.contentUris)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Gallery refused invalid pending Recycle Bin state.", Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
             startIntentSenderForResult(request.pendingIntent.intentSender, RECYCLE_MUTATION_REQUEST, null, 0, 0, 0)
         } catch (_: IntentSender.SendIntentException) {
@@ -898,14 +932,11 @@ class RecycleBinActivity : Activity() {
     private fun viewerCacheKey(contentUri: String): String = "$VIEWER_CACHE_PREFIX:$contentUri"
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-    private data class PendingRecycleMutation(
-        val mode: AndroidMediaMutationMode,
-        val contentUris: Set<String>,
-    )
-
     companion object {
         private const val MAX_TRASH_ROWS = 250
         private const val RECYCLE_MUTATION_REQUEST = 7301
+        private const val STATE_PENDING_MUTATION_MODE = "pending_recycle_mutation_mode"
+        private const val STATE_PENDING_MUTATION_URIS = "pending_recycle_mutation_uris"
         private const val GRID_THUMBNAIL_PX = 256
         private const val VIEWER_THUMBNAIL_PX = 1280
         private const val GRID_CACHE_PREFIX = "recycle-grid"
