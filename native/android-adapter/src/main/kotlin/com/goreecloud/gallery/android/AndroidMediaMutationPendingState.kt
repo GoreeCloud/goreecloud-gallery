@@ -1,14 +1,20 @@
 package com.goreecloud.gallery.android
 
+import java.util.Collections
+
 /**
  * Minimal state that may be retained while Android owns a MediaStore mutation confirmation flow.
+ *
+ * This is deliberately not a data class: a generated copy() surface would let callers manufacture
+ * altered pending state without going back through the canonical capture/restore validation
+ * boundary. The URI list is also exposed as an unmodifiable defensive copy.
  *
  * This is not a second Trash database and does not grant mutation authority. It only preserves the
  * exact already-requested mutation mode and bounded canonical MediaStore item URIs so an Activity
  * can reconcile Android's later result after ordinary recreation. The actual mutation remains
  * owned and confirmed by Android MediaStore.
  */
-data class AndroidMediaMutationPendingState internal constructor(
+class AndroidMediaMutationPendingState internal constructor(
     val mode: AndroidMediaMutationMode,
     val contentUris: List<String>,
 )
@@ -19,7 +25,7 @@ object AndroidMediaMutationPendingStates {
         contentUris: Collection<String>,
     ): AndroidMediaMutationPendingState = AndroidMediaMutationPendingState(
         mode = mode,
-        contentUris = AndroidMediaMutationRequests.normalizeMediaStoreUris(contentUris),
+        contentUris = immutableCopy(AndroidMediaMutationRequests.normalizeMediaStoreUris(contentUris)),
     )
 
     /**
@@ -41,11 +47,14 @@ object AndroidMediaMutationPendingStates {
             return null
         }
         if (supplied != canonical) return null
-        return AndroidMediaMutationPendingState(mode = mode, contentUris = canonical)
+        return AndroidMediaMutationPendingState(mode = mode, contentUris = immutableCopy(canonical))
     }
 
     fun modeName(state: AndroidMediaMutationPendingState): String = state.mode.name
 
     fun contentUriValues(state: AndroidMediaMutationPendingState): Array<String> =
         state.contentUris.toTypedArray()
+
+    private fun immutableCopy(values: List<String>): List<String> =
+        Collections.unmodifiableList(ArrayList(values))
 }
