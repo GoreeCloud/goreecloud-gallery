@@ -3,9 +3,9 @@ package com.goreecloud.gallery
 import android.Manifest
 import android.app.Activity
 import android.app.Application
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.content.pm.PackageManager
 import java.util.WeakHashMap
 
 /**
@@ -68,10 +68,13 @@ internal object AndroidGalleryMediaAccess {
 
 object GalleryMediaAccessTransitionPolicy {
     /**
-     * The first observed scope establishes a baseline. Any later scope change — including full to
-     * partial, partial to denied, selected-set authority changes reflected by Android permission
-     * state, or regained access — invalidates a Recycle Bin presentation derived under the old
-     * authority.
+     * The first observed scope establishes a baseline. Any later Android permission-scope change —
+     * including full to partial, partial to denied, or regained/broadened access — invalidates a
+     * Recycle Bin presentation derived under the old authority.
+     *
+     * Android can change the concrete item set inside an already-selected-media scope without
+     * changing this coarse permission classification. That same-scope selected-set case still needs
+     * a separate provider/selection refresh path and is not claimed by this guard.
      */
     fun requiresPresentationReset(
         previous: GalleryMediaAccessScope?,
