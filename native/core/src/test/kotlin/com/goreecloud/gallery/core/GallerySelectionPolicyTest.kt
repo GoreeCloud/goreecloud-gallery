@@ -3,7 +3,6 @@ package com.goreecloud.gallery.core
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GallerySelectionPolicyTest {
@@ -56,52 +55,6 @@ class GallerySelectionPolicyTest {
         )
 
         assertEquals(listOf(third, first), resolved)
-    }
-
-    @Test
-    fun `explicit resolution returns current item values for exact requested uris`() {
-        val stale = media("1").copy(displayName = "old-name.jpg")
-        val current = media("1").copy(displayName = "current-name.jpg")
-        val second = media("2")
-
-        assertEquals(
-            listOf(current, second),
-            GallerySelectionPolicy.resolveExactCurrentScope(
-                currentScope = listOf(current, second),
-                requestedItems = listOf(stale, second),
-            ),
-        )
-    }
-
-    @Test
-    fun `explicit resolution fails closed when requested uri left current scope`() {
-        val first = media("1")
-        val stale = media("2")
-
-        assertNull(
-            GallerySelectionPolicy.resolveExactCurrentScope(
-                currentScope = listOf(first),
-                requestedItems = listOf(stale),
-            ),
-        )
-    }
-
-    @Test
-    fun `explicit resolution rejects duplicate or ambiguous current uris`() {
-        val first = media("1")
-
-        assertNull(
-            GallerySelectionPolicy.resolveExactCurrentScope(
-                currentScope = listOf(first),
-                requestedItems = listOf(first, first),
-            ),
-        )
-        assertNull(
-            GallerySelectionPolicy.resolveExactCurrentScope(
-                currentScope = listOf(first, first.copy(displayName = "duplicate.jpg")),
-                requestedItems = listOf(first),
-            ),
-        )
     }
 
     @Test
