@@ -15,16 +15,26 @@ class AndroidMediaMutationRequestsTest {
     }
 
     @Test
-    fun `normalization keeps bounded unique MediaStore content uris`() {
+    fun `normalization preserves exact unique MediaStore content uris`() {
         val first = "content://media/external/images/media/42"
         val second = "content://media/external/video/media/7"
 
         assertEquals(
             listOf(first, second),
-            AndroidMediaMutationRequests.normalizeMediaStoreUris(
-                listOf("  $first  ", second, first),
-            ),
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(first, second)),
         )
+    }
+
+    @Test
+    fun `normalization rejects whitespace altered and duplicate mutation authority`() {
+        val first = "content://media/external/images/media/42"
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(" $first"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(first, first))
+        }
     }
 
     @Test
@@ -88,6 +98,9 @@ class AndroidMediaMutationRequestsTest {
             "content://media/external/images/media/42#fragment",
             "content://user@media/external/images/media/42",
             "content://media:80/external/images/media/42",
+            "content://media/external%2Fimages/media/42",
+            "content://media/external\\images/images/media/42",
+            "content://media/external.volume/images/media/42",
         ).forEach { uri ->
             assertFailsWith<IllegalArgumentException> {
                 AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(uri))
@@ -108,9 +121,9 @@ class AndroidMediaMutationRequestsTest {
     }
 
     @Test
-    fun `normalization enforces the mutation item bound`() {
-        val uris = (1..AndroidMediaMutationRequests.MAX_MUTATION_ITEMS + 1)
-            .map { "content://media/external/images/media/$it" }
+    fun `normalization enforces the mutation item bound before deduplication`() {
+        val duplicate = "content://media/external/images/media/1"
+        val uris = List(AndroidMediaMutationRequests.MAX_MUTATION_ITEMS + 1) { duplicate }
 
         assertFailsWith<IllegalArgumentException> {
             AndroidMediaMutationRequests.normalizeMediaStoreUris(uris)
