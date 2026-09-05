@@ -61,11 +61,21 @@ object AndroidMediaMutationRequests {
 
     internal fun normalizeMediaStoreUris(contentUris: Collection<String>): List<String> {
         require(contentUris.isNotEmpty()) { "at least one media content URI is required" }
+        require(contentUris.size <= MAX_MUTATION_ITEMS) {
+            "a single media mutation is limited to $MAX_MUTATION_ITEMS items"
+        }
 
-        val normalized = linkedSetOf<String>()
+        val normalized = ArrayList<String>(contentUris.size)
+        val seen = HashSet<String>(contentUris.size)
         contentUris.forEach { raw ->
             val value = raw.trim()
             require(value.isNotEmpty()) { "media content URIs must not be blank" }
+            require(value == raw) {
+                "MediaStore mutation URIs must already use their exact canonical form"
+            }
+            require(seen.add(value)) {
+                "MediaStore mutation URIs must be unique"
+            }
             val parsed = try {
                 URI(value)
             } catch (error: Exception) {
@@ -81,25 +91,27 @@ object AndroidMediaMutationRequests {
             require(parsed.userInfo == null && parsed.port == -1) {
                 "MediaStore mutation URIs must use the canonical content authority form"
             }
+            require(parsed.rawPath == parsed.path && '\\' !in parsed.rawPath.orEmpty()) {
+                "MediaStore mutation paths must not use encoded or backslash path controls"
+            }
             requireSpecificImageOrVideoItem(parsed)
             normalized += value
         }
 
-        require(normalized.size <= MAX_MUTATION_ITEMS) {
-            "a single media mutation is limited to $MAX_MUTATION_ITEMS items"
-        }
-        return normalized.toList()
+        return normalized
     }
 
     private fun requireSpecificImageOrVideoItem(uri: URI) {
-        val segments = uri.path
+        val segments = uri.rawPath
             ?.split('/')
             ?.filter { it.isNotBlank() }
             .orEmpty()
         require(segments.size == 4) {
             "MediaStore mutation URI must reference one specific media item"
         }
-        require(segments[0].isNotBlank()) { "MediaStore volume is required" }
+        require(segments[0].matches(Regex("[A-Za-z0-9_-]+"))) {
+            "MediaStore volume must use a canonical volume identifier"
+        }
         require(segments[1] == "images" || segments[1] == "video") {
             "Gallery mutations require an image or video MediaStore item URI"
         }

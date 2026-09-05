@@ -2,6 +2,7 @@ package com.goreecloud.gallery.android
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class AndroidMediaMutationPendingStateTest {
@@ -12,13 +13,31 @@ class AndroidMediaMutationPendingStateTest {
 
         val state = AndroidMediaMutationPendingStates.capture(
             AndroidMediaMutationMode.DELETE,
-            listOf("  $first  ", second, first),
+            listOf(first, second),
         )
 
         assertEquals(AndroidMediaMutationMode.DELETE, state.mode)
         assertEquals(listOf(first, second), state.contentUris)
         assertEquals("DELETE", AndroidMediaMutationPendingStates.modeName(state))
         assertEquals(listOf(first, second), AndroidMediaMutationPendingStates.contentUriValues(state).toList())
+    }
+
+    @Test
+    fun `capture rejects mutation authority that requires normalization`() {
+        val first = "content://media/external/images/media/42"
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationPendingStates.capture(
+                AndroidMediaMutationMode.DELETE,
+                listOf(" $first"),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationPendingStates.capture(
+                AndroidMediaMutationMode.DELETE,
+                listOf(first, first),
+            )
+        }
     }
 
     @Test
