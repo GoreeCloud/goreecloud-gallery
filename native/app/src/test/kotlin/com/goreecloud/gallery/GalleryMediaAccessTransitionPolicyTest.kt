@@ -10,19 +10,31 @@ class GalleryMediaAccessTransitionPolicyTest {
         assertFalse(
             GalleryMediaAccessTransitionPolicy.requiresPresentationReset(
                 previous = null,
-                current = GalleryMediaAccessScope.IMAGES_AND_VIDEOS,
+                current = GalleryMediaAccessScope.SELECTED,
             ),
         )
     }
 
     @Test
-    fun `unchanged authority keeps current presentation`() {
-        GalleryMediaAccessScope.entries.forEach { scope ->
-            assertFalse(
-                GalleryMediaAccessTransitionPolicy.requiresPresentationReset(scope, scope),
-                "unchanged $scope scope should not reset presentation",
-            )
-        }
+    fun `unchanged non-selected authority keeps current presentation`() {
+        GalleryMediaAccessScope.entries
+            .filterNot { it == GalleryMediaAccessScope.SELECTED }
+            .forEach { scope ->
+                assertFalse(
+                    GalleryMediaAccessTransitionPolicy.requiresPresentationReset(scope, scope),
+                    "unchanged $scope scope should not reset presentation",
+                )
+            }
+    }
+
+    @Test
+    fun `repeated selected-media resume invalidates presentation`() {
+        assertTrue(
+            GalleryMediaAccessTransitionPolicy.requiresPresentationReset(
+                previous = GalleryMediaAccessScope.SELECTED,
+                current = GalleryMediaAccessScope.SELECTED,
+            ),
+        )
     }
 
     @Test
