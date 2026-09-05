@@ -15,6 +15,11 @@ class AndroidMediaMutationRequestsTest {
     }
 
     @Test
+    fun `mutation request does not expose generated copy bypass`() {
+        assertFalse(AndroidMediaMutationRequest::class.java.declaredMethods.any { it.name == "copy" })
+    }
+
+    @Test
     fun `normalization preserves exact unique MediaStore content uris`() {
         val first = "content://media/external/images/media/42"
         val second = "content://media/external/video/media/7"
