@@ -23,8 +23,10 @@ object AndroidMediaMutationPendingStates {
     )
 
     /**
-     * Restore only exact enum state and the same fail-closed MediaStore URI shape accepted by a
-     * live mutation request. Missing, unknown, malformed, broad, or oversized state is discarded.
+     * Restore only exact enum state and the exact canonical URI list previously emitted by capture.
+     *
+     * Missing, unknown, malformed, broad, oversized, duplicated, reordered-by-normalization, or
+     * whitespace-altered saved state is discarded rather than normalized into new pending authority.
      */
     fun restore(
         modeName: String?,
@@ -32,11 +34,14 @@ object AndroidMediaMutationPendingStates {
     ): AndroidMediaMutationPendingState? {
         if (modeName.isNullOrBlank() || contentUris.isNullOrEmpty()) return null
         val mode = AndroidMediaMutationMode.entries.firstOrNull { it.name == modeName } ?: return null
-        return try {
-            capture(mode, contentUris)
+        val supplied = contentUris.toList()
+        val canonical = try {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(supplied)
         } catch (_: IllegalArgumentException) {
-            null
+            return null
         }
+        if (supplied != canonical) return null
+        return AndroidMediaMutationPendingState(mode = mode, contentUris = canonical)
     }
 
     fun modeName(state: AndroidMediaMutationPendingState): String = state.mode.name
