@@ -33,33 +33,4 @@ object GallerySelectionPolicy {
         if (selectedContentUris.isEmpty()) return emptyList()
         return currentScope.filter { it.contentUri in selectedContentUris }
     }
-
-    /**
-     * Resolves an explicit viewer/action request only when every requested URI still belongs to the
-     * exact caller-supplied current presentation scope.
-     *
-     * Unlike bulk selection, explicit one-item actions must not silently shrink a stale request to a
-     * different set. Duplicate URIs in either side are also ambiguous and fail closed. Returned
-     * values come from the current scope rather than the older caller snapshot.
-     */
-    fun resolveExactCurrentScope(
-        currentScope: List<MediaItem>,
-        requestedItems: List<MediaItem>,
-    ): List<MediaItem>? {
-        if (requestedItems.isEmpty()) return emptyList()
-
-        val currentByUri = LinkedHashMap<String, MediaItem>(currentScope.size)
-        currentScope.forEach { item ->
-            if (currentByUri.put(item.contentUri, item) != null) return null
-        }
-
-        val requestedUris = linkedSetOf<String>()
-        val resolved = ArrayList<MediaItem>(requestedItems.size)
-        requestedItems.forEach { requested ->
-            if (!requestedUris.add(requested.contentUri)) return null
-            val current = currentByUri[requested.contentUri] ?: return null
-            resolved += current
-        }
-        return resolved
-    }
 }
