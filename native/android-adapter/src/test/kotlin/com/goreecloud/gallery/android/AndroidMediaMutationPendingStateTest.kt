@@ -23,6 +23,22 @@ class AndroidMediaMutationPendingStateTest {
     }
 
     @Test
+    fun `captured pending uri state cannot be mutated through exposed list`() {
+        val uri = "content://media/external/images/media/42"
+        val state = AndroidMediaMutationPendingStates.capture(
+            AndroidMediaMutationMode.RESTORE,
+            listOf(uri),
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        val mutableView = state.contentUris as MutableList<String>
+        assertFailsWith<UnsupportedOperationException> {
+            mutableView += "content://media/external/images/media/99"
+        }
+        assertEquals(listOf(uri), state.contentUris)
+    }
+
+    @Test
     fun `capture rejects mutation authority that requires normalization`() {
         val first = "content://media/external/images/media/42"
 
