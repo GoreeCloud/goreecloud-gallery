@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import java.net.URI
+import java.util.Collections
 
 /**
  * Creates Android-owned confirmation requests for MediaStore trash/recovery/destructive operations.
@@ -20,11 +21,21 @@ enum class AndroidMediaMutationMode {
     DELETE,
 }
 
-data class AndroidMediaMutationRequest(
+/**
+ * Exact request state paired with the Android-owned PendingIntent produced for that same mode/scope.
+ *
+ * This is deliberately not a data class. A generated copy() method could pair an already-created
+ * Android PendingIntent with a different mode or URI list and make Gallery retain pending state that
+ * no longer describes the actual Android confirmation request. The URI list is defensively copied
+ * and unmodifiable for the same reason.
+ */
+class AndroidMediaMutationRequest internal constructor(
     val mode: AndroidMediaMutationMode,
-    val contentUris: List<String>,
+    contentUris: List<String>,
     val pendingIntent: PendingIntent,
-)
+) {
+    val contentUris: List<String> = Collections.unmodifiableList(ArrayList(contentUris))
+}
 
 object AndroidMediaMutationRequests {
     const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
