@@ -32,6 +32,16 @@ class AndroidMediaMutationPendingStateTest {
     }
 
     @Test
+    fun `restore rejects saved state that would require normalization`() {
+        val first = "content://media/external/images/media/42"
+        val second = "content://media/external/video/media/7"
+
+        assertNull(AndroidMediaMutationPendingStates.restore("DELETE", listOf("  $first  ")))
+        assertNull(AndroidMediaMutationPendingStates.restore("DELETE", listOf(first, first)))
+        assertNull(AndroidMediaMutationPendingStates.restore("RESTORE", listOf(first, second, first)))
+    }
+
+    @Test
     fun `restore fails closed for missing or unknown state`() {
         val uri = "content://media/external/images/media/42"
 
