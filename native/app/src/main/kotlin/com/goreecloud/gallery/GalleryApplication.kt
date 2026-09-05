@@ -72,12 +72,16 @@ object GalleryMediaAccessTransitionPolicy {
      * including full to partial, partial to denied, or regained/broadened access — invalidates a
      * Recycle Bin presentation derived under the old authority.
      *
-     * Android can change the concrete item set inside an already-selected-media scope without
-     * changing this coarse permission classification. That same-scope selected-set case still needs
-     * a separate provider/selection refresh path and is not claimed by this guard.
+     * Android 14+ can also change the concrete user-selected media set while the coarse permission
+     * classification remains SELECTED. Android does not expose a selected-set revision token to
+     * this Activity, so a repeated resume under SELECTED authority conservatively invalidates the
+     * presentation as well. The replacement Activity establishes a fresh baseline, preventing a
+     * recreation loop while ensuring an open viewer cannot continue displaying a pre-change item.
      */
     fun requiresPresentationReset(
         previous: GalleryMediaAccessScope?,
         current: GalleryMediaAccessScope,
-    ): Boolean = previous != null && previous != current
+    ): Boolean =
+        previous != null &&
+            (previous != current || current == GalleryMediaAccessScope.SELECTED)
 }
