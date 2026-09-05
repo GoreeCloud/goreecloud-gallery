@@ -30,5 +30,22 @@ object GalleryMediaAccessPolicy {
 
     fun canRead(scope: GalleryMediaAccessScope): Boolean = scope != GalleryMediaAccessScope.DENIED
 
-    fun isPartial(scope: GalleryMediaAccessScope): Boolean = scope == GalleryMediaAccessScope.SELECTED
+    /**
+     * Reports any authority that exposes less than the complete image-and-video library available
+     * to the current Android permission model.
+     *
+     * Android 14+ user-selected access is partial by item selection. Android 13+ image-only and
+     * video-only grants are also partial for Gallery as a mixed-media application and must retain
+     * the visible Change access affordance rather than being presented as complete library access.
+     */
+    fun isPartial(scope: GalleryMediaAccessScope): Boolean = when (scope) {
+        GalleryMediaAccessScope.SELECTED,
+        GalleryMediaAccessScope.IMAGES,
+        GalleryMediaAccessScope.VIDEOS,
+        -> true
+        GalleryMediaAccessScope.DENIED,
+        GalleryMediaAccessScope.LEGACY_FULL,
+        GalleryMediaAccessScope.IMAGES_AND_VIDEOS,
+        -> false
+    }
 }

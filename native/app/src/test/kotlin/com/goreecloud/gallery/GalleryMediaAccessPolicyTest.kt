@@ -22,53 +22,52 @@ class GalleryMediaAccessPolicyTest {
 
     @Test
     fun fullTypeGrantsTakePrecedenceOverSelectedMarker() {
-        assertEquals(
-            GalleryMediaAccessScope.IMAGES,
-            GalleryMediaAccessPolicy.resolve(
-                GalleryMediaPermissionSnapshot(
-                    apiLevel = 36,
-                    readMediaImages = true,
-                    readMediaVisualUserSelected = true,
-                ),
+        val imagesOnly = GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(
+                apiLevel = 36,
+                readMediaImages = true,
+                readMediaVisualUserSelected = true,
             ),
         )
-        assertEquals(
-            GalleryMediaAccessScope.IMAGES_AND_VIDEOS,
-            GalleryMediaAccessPolicy.resolve(
-                GalleryMediaPermissionSnapshot(
-                    apiLevel = 36,
-                    readMediaImages = true,
-                    readMediaVideo = true,
-                    readMediaVisualUserSelected = true,
-                ),
+        val imagesAndVideos = GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(
+                apiLevel = 36,
+                readMediaImages = true,
+                readMediaVideo = true,
+                readMediaVisualUserSelected = true,
             ),
         )
+
+        assertEquals(GalleryMediaAccessScope.IMAGES, imagesOnly)
+        assertTrue(GalleryMediaAccessPolicy.isPartial(imagesOnly))
+        assertEquals(GalleryMediaAccessScope.IMAGES_AND_VIDEOS, imagesAndVideos)
+        assertFalse(GalleryMediaAccessPolicy.isPartial(imagesAndVideos))
     }
 
     @Test
-    fun android13TracksImageAndVideoAuthoritySeparately() {
-        assertEquals(
-            GalleryMediaAccessScope.IMAGES,
-            GalleryMediaAccessPolicy.resolve(
-                GalleryMediaPermissionSnapshot(apiLevel = 33, readMediaImages = true),
-            ),
+    fun android13TracksImageAndVideoAuthoritySeparatelyAsPartialGalleryAccess() {
+        val images = GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(apiLevel = 33, readMediaImages = true),
         )
-        assertEquals(
-            GalleryMediaAccessScope.VIDEOS,
-            GalleryMediaAccessPolicy.resolve(
-                GalleryMediaPermissionSnapshot(apiLevel = 33, readMediaVideo = true),
-            ),
+        val videos = GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(apiLevel = 33, readMediaVideo = true),
         )
+
+        assertEquals(GalleryMediaAccessScope.IMAGES, images)
+        assertTrue(GalleryMediaAccessPolicy.canRead(images))
+        assertTrue(GalleryMediaAccessPolicy.isPartial(images))
+        assertEquals(GalleryMediaAccessScope.VIDEOS, videos)
+        assertTrue(GalleryMediaAccessPolicy.canRead(videos))
+        assertTrue(GalleryMediaAccessPolicy.isPartial(videos))
     }
 
     @Test
     fun legacyReadExternalStorageIsFullOnlyThroughApi32() {
-        assertEquals(
-            GalleryMediaAccessScope.LEGACY_FULL,
-            GalleryMediaAccessPolicy.resolve(
-                GalleryMediaPermissionSnapshot(apiLevel = 32, readExternalStorage = true),
-            ),
+        val legacy = GalleryMediaAccessPolicy.resolve(
+            GalleryMediaPermissionSnapshot(apiLevel = 32, readExternalStorage = true),
         )
+        assertEquals(GalleryMediaAccessScope.LEGACY_FULL, legacy)
+        assertFalse(GalleryMediaAccessPolicy.isPartial(legacy))
         assertEquals(
             GalleryMediaAccessScope.DENIED,
             GalleryMediaAccessPolicy.resolve(

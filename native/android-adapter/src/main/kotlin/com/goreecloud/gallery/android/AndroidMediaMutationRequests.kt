@@ -8,14 +8,15 @@ import android.provider.MediaStore
 import java.net.URI
 
 /**
- * Creates Android-owned confirmation requests for destructive MediaStore operations.
+ * Creates Android-owned confirmation requests for MediaStore trash/recovery/destructive operations.
  *
  * GoreeCloud Gallery never turns a rendered/selected item into direct filesystem authority.
  * Only bounded MediaStore image/video item URIs from the current authorized presentation scope may
- * reach this boundary, and Android remains responsible for the destructive confirmation UI.
+ * reach this boundary, and Android remains responsible for the final confirmation UI.
  */
 enum class AndroidMediaMutationMode {
     TRASH,
+    RESTORE,
     DELETE,
 }
 
@@ -38,7 +39,7 @@ object AndroidMediaMutationRequests {
         mode: AndroidMediaMutationMode,
     ): AndroidMediaMutationRequest {
         check(isSupported()) {
-            "Android-authorized trash/delete requests require Android 11 or newer"
+            "Android-authorized trash/restore/delete requests require Android 11 or newer"
         }
 
         val normalizedUris = normalizeMediaStoreUris(contentUris)
@@ -46,6 +47,8 @@ object AndroidMediaMutationRequests {
         val pendingIntent = when (mode) {
             AndroidMediaMutationMode.TRASH ->
                 MediaStore.createTrashRequest(contentResolver, androidUris, true)
+            AndroidMediaMutationMode.RESTORE ->
+                MediaStore.createTrashRequest(contentResolver, androidUris, false)
             AndroidMediaMutationMode.DELETE ->
                 MediaStore.createDeleteRequest(contentResolver, androidUris)
         }
@@ -71,6 +74,12 @@ object AndroidMediaMutationRequests {
             require(parsed.scheme == "content") { "only content URIs may be mutated" }
             require(parsed.authority == MediaStore.AUTHORITY) {
                 "only Android MediaStore URIs may be mutated"
+            }
+            require(parsed.rawQuery == null && parsed.rawFragment == null) {
+                "MediaStore mutation URIs must not include query parameters or fragments"
+            }
+            require(parsed.userInfo == null && parsed.port == -1) {
+                "MediaStore mutation URIs must use the canonical content authority form"
             }
             requireSpecificImageOrVideoItem(parsed)
             normalized += value
@@ -98,8 +107,8 @@ object AndroidMediaMutationRequests {
             "MediaStore mutation URI must reference the media item collection"
         }
         val itemId = segments[3].toLongOrNull()
-        require(itemId != null && itemId >= 0) {
-            "MediaStore mutation URI must reference an item by numeric ID"
+        require(itemId != null && itemId > 0) {
+            "MediaStore mutation URI must reference a positive numeric item ID"
         }
     }
 }
