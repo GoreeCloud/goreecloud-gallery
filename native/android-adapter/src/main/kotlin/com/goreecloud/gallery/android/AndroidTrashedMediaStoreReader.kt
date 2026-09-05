@@ -15,6 +15,9 @@ import com.goreecloud.gallery.core.MediaStoreRow
  * This reader deliberately keeps Android MediaStore as the Trash authority. It does not create an
  * app-private duplicate trash database, broaden filesystem access, or infer deleted state from a
  * Gallery-owned list. Android 11+ is required because QUERY_ARG_MATCH_TRASHED was added in API 30.
+ * The provider request itself is bounded to the same validated row ceiling enforced while consuming
+ * the returned cursor, so a cooperative MediaStore provider need not materialize an unnecessarily
+ * large Trash result merely for Gallery to discard rows past its Development presentation bound.
  */
 class AndroidTrashedMediaStoreReader(
     private val contentResolver: ContentResolver,
@@ -40,6 +43,7 @@ class AndroidTrashedMediaStoreReader(
             putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
             putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
             putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+            putInt(ContentResolver.QUERY_ARG_LIMIT, maxRows)
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
         }
 
@@ -55,6 +59,7 @@ class AndroidTrashedMediaStoreReader(
             val items = ArrayList<MediaItem>(minOf(maxRows, 64))
             var rejected = 0
             var inspected = 0
+            // Keep the consumer-side ceiling even when an OEM/provider ignores QUERY_ARG_LIMIT.
             while (inspected < maxRows && it.moveToNext()) {
                 inspected += 1
                 try {
