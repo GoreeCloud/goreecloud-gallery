@@ -41,6 +41,9 @@ object AndroidMediaMutationRequests {
     const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
     const val MAX_MUTATION_ITEMS = 100
 
+    private val canonicalMediaStoreItemPath =
+        Regex("^/([A-Za-z0-9_-]+)/(images|video)/media/([1-9][0-9]*)$")
+
     fun isSupported(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
         apiLevel >= MIN_SUPPORTED_API
 
@@ -113,25 +116,13 @@ object AndroidMediaMutationRequests {
     }
 
     private fun requireSpecificImageOrVideoItem(uri: URI) {
-        val segments = uri.rawPath
-            ?.split('/')
-            ?.filter { it.isNotBlank() }
-            .orEmpty()
-        require(segments.size == 4) {
-            "MediaStore mutation URI must reference one specific media item"
+        val path = uri.rawPath.orEmpty()
+        val match = canonicalMediaStoreItemPath.matchEntire(path)
+        require(match != null) {
+            "MediaStore mutation URI must use /<volume>/(images|video)/media/<positive canonical id>"
         }
-        require(segments[0].matches(Regex("[A-Za-z0-9_-]+"))) {
-            "MediaStore volume must use a canonical volume identifier"
-        }
-        require(segments[1] == "images" || segments[1] == "video") {
-            "Gallery mutations require an image or video MediaStore item URI"
-        }
-        require(segments[2] == "media") {
-            "MediaStore mutation URI must reference the media item collection"
-        }
-        val itemId = segments[3].toLongOrNull()
-        require(itemId != null && itemId > 0) {
-            "MediaStore mutation URI must reference a positive numeric item ID"
+        require(match.groupValues[3].toLongOrNull() != null) {
+            "MediaStore mutation URI item ID exceeds the supported numeric range"
         }
     }
 }
