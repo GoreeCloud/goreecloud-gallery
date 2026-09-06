@@ -16,8 +16,10 @@ import java.util.Collections
  */
 class AndroidMediaMutationPendingState internal constructor(
     val mode: AndroidMediaMutationMode,
-    val contentUris: List<String>,
-)
+    contentUris: List<String>,
+) {
+    val contentUris: List<String> = Collections.unmodifiableList(ArrayList(contentUris))
+}
 
 object AndroidMediaMutationPendingStates {
     fun capture(
@@ -25,7 +27,7 @@ object AndroidMediaMutationPendingStates {
         contentUris: Collection<String>,
     ): AndroidMediaMutationPendingState = AndroidMediaMutationPendingState(
         mode = mode,
-        contentUris = immutableCopy(AndroidMediaMutationRequests.normalizeMediaStoreUris(contentUris)),
+        contentUris = AndroidMediaMutationRequests.normalizeMediaStoreUris(contentUris),
     )
 
     /**
@@ -47,14 +49,11 @@ object AndroidMediaMutationPendingStates {
             return null
         }
         if (supplied != canonical) return null
-        return AndroidMediaMutationPendingState(mode = mode, contentUris = immutableCopy(canonical))
+        return AndroidMediaMutationPendingState(mode = mode, contentUris = canonical)
     }
 
     fun modeName(state: AndroidMediaMutationPendingState): String = state.mode.name
 
     fun contentUriValues(state: AndroidMediaMutationPendingState): Array<String> =
         state.contentUris.toTypedArray()
-
-    private fun immutableCopy(values: List<String>): List<String> =
-        Collections.unmodifiableList(ArrayList(values))
 }
