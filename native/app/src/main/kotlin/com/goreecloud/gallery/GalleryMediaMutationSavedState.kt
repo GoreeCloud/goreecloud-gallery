@@ -1,5 +1,6 @@
 package com.goreecloud.gallery
 
+import com.goreecloud.gallery.android.AndroidMediaMutationMode
 import com.goreecloud.gallery.android.AndroidMediaMutationPendingState
 import com.goreecloud.gallery.android.AndroidMediaMutationPendingStates
 
@@ -24,12 +25,16 @@ internal class GalleryMediaMutationSavedState internal constructor(
 internal object GalleryMediaMutationSavedStates {
     const val SCHEMA_VERSION = 1
 
-    fun capture(state: AndroidMediaMutationPendingState): GalleryMediaMutationSavedState =
-        GalleryMediaMutationSavedState(
+    fun capture(state: AndroidMediaMutationPendingState): GalleryMediaMutationSavedState {
+        require(state.mode == AndroidMediaMutationMode.TRASH || state.mode == AndroidMediaMutationMode.DELETE) {
+            "main Gallery saved state may retain only trash or permanent delete authority"
+        }
+        return GalleryMediaMutationSavedState(
             schemaVersion = SCHEMA_VERSION,
             modeName = AndroidMediaMutationPendingStates.modeName(state),
             contentUris = AndroidMediaMutationPendingStates.contentUriValues(state),
         )
+    }
 
     fun restore(
         schemaVersion: Int?,
