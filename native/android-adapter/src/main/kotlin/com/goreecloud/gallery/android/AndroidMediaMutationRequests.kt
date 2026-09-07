@@ -40,6 +40,8 @@ class AndroidMediaMutationRequest internal constructor(
 object AndroidMediaMutationRequests {
     const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
     const val MAX_MUTATION_ITEMS = 100
+    const val MAX_CONTENT_URI_CHARACTERS = 1024
+    const val MAX_TOTAL_CONTENT_URI_CHARACTERS = 64 * 1024
 
     private val canonicalMediaStoreItemPath =
         Regex("^/([A-Za-z0-9_-]+)/(images|video)/media/([1-9][0-9]*)$")
@@ -81,11 +83,19 @@ object AndroidMediaMutationRequests {
 
         val normalized = ArrayList<String>(contentUris.size)
         val seen = HashSet<String>(contentUris.size)
+        var totalUriCharacters = 0
         contentUris.forEach { raw ->
             val value = raw.trim()
             require(value.isNotEmpty()) { "media content URIs must not be blank" }
             require(value == raw) {
                 "MediaStore mutation URIs must already use their exact canonical form"
+            }
+            require(value.length <= MAX_CONTENT_URI_CHARACTERS) {
+                "MediaStore mutation URI exceeds the supported size bound"
+            }
+            totalUriCharacters += value.length
+            require(totalUriCharacters <= MAX_TOTAL_CONTENT_URI_CHARACTERS) {
+                "MediaStore mutation URI scope exceeds the supported saved-state size bound"
             }
             require(seen.add(value)) {
                 "MediaStore mutation URIs must be unique"
