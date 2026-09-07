@@ -2,9 +2,12 @@ package com.goreecloud.gallery
 
 import com.goreecloud.gallery.android.AndroidMediaMutationMode
 import com.goreecloud.gallery.android.AndroidMediaMutationPendingStates
+import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GalleryMediaMutationPendingPolicyTest {
     @Test
@@ -59,8 +62,28 @@ class GalleryMediaMutationPendingPolicyTest {
     }
 
     @Test
+    fun `pending mutation item count follows Android mutation bound`() {
+        assertEquals(
+            AndroidMediaMutationRequests.MAX_MUTATION_ITEMS,
+            GalleryMediaMutationPendingPolicy.MAX_PENDING_CONTENT_URIS,
+        )
+        assertFalse(GalleryMediaMutationPendingPolicy.acceptsItemCount(0))
+        assertTrue(GalleryMediaMutationPendingPolicy.acceptsItemCount(1))
+        assertTrue(
+            GalleryMediaMutationPendingPolicy.acceptsItemCount(
+                GalleryMediaMutationPendingPolicy.MAX_PENDING_CONTENT_URIS,
+            ),
+        )
+        assertFalse(
+            GalleryMediaMutationPendingPolicy.acceptsItemCount(
+                GalleryMediaMutationPendingPolicy.MAX_PENDING_CONTENT_URIS + 1,
+            ),
+        )
+    }
+
+    @Test
     fun `oversized saved mutation scope fails closed`() {
-        val oversized = (1..GalleryMediaMutationPendingPolicy.MAX_RESTORED_CONTENT_URIS + 1).map { id ->
+        val oversized = (1..GalleryMediaMutationPendingPolicy.MAX_PENDING_CONTENT_URIS + 1).map { id ->
             "content://media/external/images/media/$id"
         }
 
