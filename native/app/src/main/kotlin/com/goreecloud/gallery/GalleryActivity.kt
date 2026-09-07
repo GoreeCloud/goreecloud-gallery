@@ -33,6 +33,8 @@ import android.widget.Space
 import android.widget.TextView
 import android.widget.Toast
 import com.goreecloud.gallery.android.AndroidMediaMutationMode
+import com.goreecloud.gallery.android.AndroidMediaMutationPendingState
+import com.goreecloud.gallery.android.AndroidMediaMutationPendingStates
 import com.goreecloud.gallery.android.AndroidMediaMutationRequests
 import com.goreecloud.gallery.android.AndroidMediaStoreReader
 import com.goreecloud.gallery.android.AndroidTrashedMediaStoreReader
@@ -88,7 +90,7 @@ class GalleryActivity : Activity() {
     private var showingFavorites = false
     private var searchQuery = ""
     private var viewerOverlay: View? = null
-    private var pendingMediaMutation: PendingMediaMutation? = null
+    private var pendingMediaMutation: AndroidMediaMutationPendingState? = null
 
     private val inSelectionMode: Boolean
         get() = selectedUris.isNotEmpty()
@@ -98,8 +100,23 @@ class GalleryActivity : Activity() {
         favoriteUris += galleryPreferences()
             .getStringSet(FAVORITES_KEY, emptySet())
             .orEmpty()
+        pendingMediaMutation = restorePendingMediaMutation(savedInstanceState)
         reconfigureThumbnailExecutor(currentUserSettings().fileLoadingPriority)
         buildSurface()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        pendingMediaMutation?.let { mutation ->
+            outState.putString(
+                STATE_PENDING_MEDIA_MUTATION_MODE,
+                AndroidMediaMutationPendingStates.modeName(mutation),
+            )
+            outState.putStringArray(
+                STATE_PENDING_MEDIA_MUTATION_URIS,
+                AndroidMediaMutationPendingStates.contentUriValues(mutation),
+            )
+        }
+        super.onSaveInstanceState(outState)
     }
 
     override fun onResume() {
@@ -148,6 +165,12 @@ class GalleryActivity : Activity() {
             IMPORT_SETTINGS_REQUEST -> readJsonDocument(uri) { importSettings(it) }
         }
     }
+
+    private fun restorePendingMediaMutation(savedInstanceState: Bundle?): AndroidMediaMutationPendingState? =
+        GalleryMediaMutationPendingPolicy.restore(
+            modeName = savedInstanceState?.getString(STATE_PENDING_MEDIA_MUTATION_MODE),
+            contentUris = savedInstanceState?.getStringArray(STATE_PENDING_MEDIA_MUTATION_URIS)?.asList(),
+        )
 
     override fun onDestroy() {
         thumbnailExecutor.shutdownNow()
@@ -1426,10 +1449,12 @@ class GalleryActivity : Activity() {
             return
         }
 
-        pendingMediaMutation = PendingMediaMutation(
-            mode = request.mode,
-            contentUris = request.contentUris.toSet(),
-        )
+        pendingMediaMutation = try {
+            AndroidMediaMutationPendingStates.capture(request.mode, request.contentUris)
+        } catch (_: IllegalArgumentException) {
+            Toast.makeText(this, "Gallery refused invalid pending media mutation state.", Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
             startIntentSenderForResult(
                 request.pendingIntent.intentSender,
@@ -1448,7 +1473,7 @@ class GalleryActivity : Activity() {
         }
     }
 
-    private fun completeConfirmedMediaMutation(mutation: PendingMediaMutation) {
+    private fun completeConfirmedMediaMutation(mutation: AndroidMediaMutationPendingState) {
         if (mutation.mode == AndroidMediaMutationMode.DELETE) {
             favoriteUris.removeAll(mutation.contentUris)
             persistFavorites()
@@ -2695,11 +2720,6 @@ class GalleryActivity : Activity() {
         val isFavorites: Boolean,
     )
 
-    private data class PendingMediaMutation(
-        val mode: AndroidMediaMutationMode,
-        val contentUris: Set<String>,
-    )
-
     private enum class GalleryDestination {
         PHOTOS,
         ALBUMS,
@@ -2714,6 +2734,8 @@ class GalleryActivity : Activity() {
         const val IMPORT_FAVORITES_REQUEST = 4202
         const val EXPORT_SETTINGS_REQUEST = 4203
         const val IMPORT_SETTINGS_REQUEST = 4204
+        const val STATE_PENDING_MEDIA_MUTATION_MODE = "pending_media_mutation_mode"
+        const val STATE_PENDING_MEDIA_MUTATION_URIS = "pending_media_mutation_uris"
 
         const val GRID_GAP_DP = 3
         const val GRID_CORNER_DP = 8
