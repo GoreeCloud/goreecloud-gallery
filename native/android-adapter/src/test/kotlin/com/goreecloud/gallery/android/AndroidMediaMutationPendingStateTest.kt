@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AndroidMediaMutationPendingStateTest {
     @Test
@@ -106,5 +107,33 @@ class AndroidMediaMutationPendingStateTest {
             .map { "content://media/external/images/media/$it" }
 
         assertNull(AndroidMediaMutationPendingStates.restore("RESTORE", uris))
+    }
+
+    @Test
+    fun `capture and restore enforce the individual uri size bound`() {
+        val oversizedVolume = "a".repeat(AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS)
+        val uri = "content://media/$oversizedVolume/images/media/1"
+        assertTrue(uri.length > AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS)
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationPendingStates.capture(AndroidMediaMutationMode.DELETE, listOf(uri))
+        }
+        assertNull(AndroidMediaMutationPendingStates.restore("DELETE", listOf(uri)))
+    }
+
+    @Test
+    fun `capture and restore enforce the aggregate uri scope bound`() {
+        val uris = (1..71).map { id ->
+            val volume = "v$id-" + "a".repeat(900)
+            "content://media/$volume/images/media/$id"
+        }
+        assertTrue(uris.size <= AndroidMediaMutationRequests.MAX_MUTATION_ITEMS)
+        assertTrue(uris.all { it.length <= AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS })
+        assertTrue(uris.sumOf(String::length) > AndroidMediaMutationRequests.MAX_TOTAL_CONTENT_URI_CHARACTERS)
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationPendingStates.capture(AndroidMediaMutationMode.TRASH, uris)
+        }
+        assertNull(AndroidMediaMutationPendingStates.restore("TRASH", uris))
     }
 }
