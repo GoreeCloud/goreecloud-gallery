@@ -22,6 +22,7 @@ internal class GalleryVideoPlayerSurface(
     private var loadedContentUri: String? = null
     private var loadedPlan: GalleryViewerPlaybackPlan? = null
     private var playbackSession = GalleryVideoPlaybackSession.idle()
+    private var playbackProgress: GalleryVideoPlaybackProgress? = null
 
     var onPlaybackError: ((what: Int, extra: Int) -> Unit)? = null
 
@@ -38,11 +39,16 @@ internal class GalleryVideoPlayerSurface(
         videoView.setOnPreparedListener { mediaPlayer ->
             val plan = loadedPlan ?: return@setOnPreparedListener
             playbackSession = playbackSession.prepared()
+            playbackProgress = playbackProgress?.observe(
+                observedPositionMillis = videoView.currentPosition.coerceAtLeast(0).toLong(),
+                observedDurationMillis = videoView.duration.takeIf { it >= 0 }?.toLong(),
+            )
             mediaPlayer.isLooping = plan.shouldLoop
             if (playbackSession.wantsPlayback()) videoView.start()
         }
         videoView.setOnCompletionListener {
             playbackSession = playbackSession.completed()
+            playbackProgress = playbackProgress?.completed()
         }
         videoView.setOnErrorListener { _, what, extra ->
             playbackSession = playbackSession.failed()
@@ -59,6 +65,7 @@ internal class GalleryVideoPlayerSurface(
         loadedContentUri = canonicalUri
         loadedPlan = plan
         playbackSession = GalleryVideoPlaybackSession.loading(plan)
+        playbackProgress = GalleryVideoPlaybackProgress.initial(plan)
         videoView.setVideoURI(Uri.parse(canonicalUri))
         videoView.requestFocus()
     }
@@ -76,6 +83,7 @@ internal class GalleryVideoPlayerSurface(
         val wasRequested = playbackSession.wantsPlayback() || videoView.isPlaying
         playbackSession = playbackSession.pause()
         if (wasRequested) videoView.pause()
+        captureProgress()
         return wasRequested
     }
 
@@ -85,6 +93,7 @@ internal class GalleryVideoPlayerSurface(
         playbackSession = playbackSession.pauseForHost()
         val paused = wantedPlayback && !playbackSession.wantsPlayback()
         if (paused) videoView.pause()
+        captureProgress()
         return paused
     }
 
@@ -97,11 +106,29 @@ internal class GalleryVideoPlayerSurface(
         return resumed
     }
 
+    fun seekTo(positionMillis: Long): Boolean {
+        val progress = playbackProgress ?: return false
+        val target = try {
+            progress.seekTarget(positionMillis)
+        } catch (_: IllegalArgumentException) {
+            return false
+        }
+        videoView.seekTo(target.toInt())
+        playbackProgress = progress.seek(target)
+        return true
+    }
+
+    fun progressSnapshot(): GalleryVideoPlaybackProgress? {
+        captureProgress()
+        return playbackProgress
+    }
+
     fun stop() {
         if (loadedContentUri != null) videoView.stopPlayback()
         loadedContentUri = null
         loadedPlan = null
         playbackSession = playbackSession.stopped()
+        playbackProgress = null
     }
 
     fun hasLoadedVideo(): Boolean =
@@ -111,4 +138,13 @@ internal class GalleryVideoPlayerSurface(
         playbackSession.state == GalleryVideoPlaybackState.PLAYING && videoView.isPlaying
 
     fun playbackState(): GalleryVideoPlaybackState = playbackSession.state
+
+    private fun captureProgress() {
+        val progress = playbackProgress ?: return
+        if (loadedContentUri == null) return
+        playbackProgress = progress.observe(
+            observedPositionMillis = videoView.currentPosition.coerceAtLeast(0).toLong(),
+            observedDurationMillis = videoView.duration.takeIf { it >= 0 }?.toLong(),
+        )
+    }
 }
