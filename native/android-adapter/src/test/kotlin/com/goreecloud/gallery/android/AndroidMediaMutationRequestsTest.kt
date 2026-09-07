@@ -134,4 +134,30 @@ class AndroidMediaMutationRequestsTest {
             AndroidMediaMutationRequests.normalizeMediaStoreUris(uris)
         }
     }
+
+    @Test
+    fun `normalization rejects an oversized individual content uri`() {
+        val oversizedVolume = "a".repeat(AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS)
+        val uri = "content://media/$oversizedVolume/images/media/1"
+        assertTrue(uri.length > AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS)
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(listOf(uri))
+        }
+    }
+
+    @Test
+    fun `normalization rejects an oversized aggregate content uri scope`() {
+        val uris = (1..70).map { id ->
+            val volume = "v$id-" + "a".repeat(900)
+            "content://media/$volume/images/media/$id"
+        }
+        assertTrue(uris.size <= AndroidMediaMutationRequests.MAX_MUTATION_ITEMS)
+        assertTrue(uris.all { it.length <= AndroidMediaMutationRequests.MAX_CONTENT_URI_CHARACTERS })
+        assertTrue(uris.sumOf(String::length) > AndroidMediaMutationRequests.MAX_TOTAL_CONTENT_URI_CHARACTERS)
+
+        assertFailsWith<IllegalArgumentException> {
+            AndroidMediaMutationRequests.normalizeMediaStoreUris(uris)
+        }
+    }
 }
