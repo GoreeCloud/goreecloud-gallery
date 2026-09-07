@@ -57,4 +57,13 @@ class GalleryMediaMutationPendingPolicyTest {
         assertNull(GalleryMediaMutationPendingPolicy.restore("DELETE", listOf(uri, uri)))
         assertNull(GalleryMediaMutationPendingPolicy.restore("DELETE", emptyList()))
     }
+
+    @Test
+    fun `oversized saved mutation scope fails closed`() {
+        val oversized = (1..GalleryMediaMutationPendingPolicy.MAX_RESTORED_CONTENT_URIS + 1).map { id ->
+            "content://media/external/images/media/$id"
+        }
+
+        assertNull(GalleryMediaMutationPendingPolicy.restore("TRASH", oversized))
+    }
 }
