@@ -21,7 +21,7 @@ internal class GalleryVideoPlayerSurface(
     private val videoView = VideoView(context)
     private var loadedContentUri: String? = null
     private var loadedPlan: GalleryViewerPlaybackPlan? = null
-    private var resumeAfterHostPause = false
+    private var playbackSession = GalleryVideoPlaybackSession.idle()
 
     var onPlaybackError: ((what: Int, extra: Int) -> Unit)? = null
 
@@ -37,11 +37,15 @@ internal class GalleryVideoPlayerSurface(
         )
         videoView.setOnPreparedListener { mediaPlayer ->
             val plan = loadedPlan ?: return@setOnPreparedListener
+            playbackSession = playbackSession.prepared()
             mediaPlayer.isLooping = plan.shouldLoop
-            if (plan.shouldAutoPlay) videoView.start()
+            if (playbackSession.wantsPlayback()) videoView.start()
+        }
+        videoView.setOnCompletionListener {
+            playbackSession = playbackSession.completed()
         }
         videoView.setOnErrorListener { _, what, extra ->
-            resumeAfterHostPause = false
+            playbackSession = playbackSession.failed()
             onPlaybackError?.invoke(what, extra)
             true
         }
@@ -54,49 +58,57 @@ internal class GalleryVideoPlayerSurface(
         val canonicalUri = AndroidMediaStoreItemUriPolicy.requireCanonicalItemUri(contentUri)
         loadedContentUri = canonicalUri
         loadedPlan = plan
-        resumeAfterHostPause = false
+        playbackSession = GalleryVideoPlaybackSession.loading(plan)
         videoView.setVideoURI(Uri.parse(canonicalUri))
         videoView.requestFocus()
     }
 
     fun play(): Boolean {
         if (loadedContentUri == null) return false
+        playbackSession = playbackSession.play()
+        if (!playbackSession.wantsPlayback()) return false
         videoView.start()
         return true
     }
 
     fun pause(): Boolean {
         if (loadedContentUri == null) return false
-        val wasPlaying = videoView.isPlaying
-        videoView.pause()
-        return wasPlaying
+        val wasRequested = playbackSession.wantsPlayback() || videoView.isPlaying
+        playbackSession = playbackSession.pause()
+        if (wasRequested) videoView.pause()
+        return wasRequested
     }
 
     fun pauseForHost(): Boolean {
-        if (loadedContentUri == null) {
-            resumeAfterHostPause = false
-            return false
-        }
-        resumeAfterHostPause = videoView.isPlaying
-        if (resumeAfterHostPause) videoView.pause()
-        return resumeAfterHostPause
+        if (loadedContentUri == null) return false
+        val wantedPlayback = playbackSession.wantsPlayback()
+        playbackSession = playbackSession.pauseForHost()
+        val paused = wantedPlayback && !playbackSession.wantsPlayback()
+        if (paused) videoView.pause()
+        return paused
     }
 
     fun resumeForHost(): Boolean {
-        if (!resumeAfterHostPause || loadedContentUri == null) return false
-        resumeAfterHostPause = false
-        videoView.start()
-        return true
+        if (loadedContentUri == null) return false
+        val wantedPlayback = playbackSession.wantsPlayback()
+        playbackSession = playbackSession.resumeForHost()
+        val resumed = !wantedPlayback && playbackSession.wantsPlayback()
+        if (resumed) videoView.start()
+        return resumed
     }
 
     fun stop() {
         if (loadedContentUri != null) videoView.stopPlayback()
         loadedContentUri = null
         loadedPlan = null
-        resumeAfterHostPause = false
+        playbackSession = playbackSession.stopped()
     }
 
-    fun hasLoadedVideo(): Boolean = loadedContentUri != null
+    fun hasLoadedVideo(): Boolean =
+        loadedContentUri != null && playbackSession.state != GalleryVideoPlaybackState.IDLE
 
-    fun isPlaying(): Boolean = loadedContentUri != null && videoView.isPlaying
+    fun isPlaying(): Boolean =
+        playbackSession.state == GalleryVideoPlaybackState.PLAYING && videoView.isPlaying
+
+    fun playbackState(): GalleryVideoPlaybackState = playbackSession.state
 }
