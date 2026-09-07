@@ -4,6 +4,7 @@ import com.goreecloud.gallery.android.AndroidMediaMutationMode
 import com.goreecloud.gallery.android.AndroidMediaMutationPendingStates
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class GalleryMediaMutationSavedStateTest {
@@ -40,6 +41,18 @@ class GalleryMediaMutationSavedStateTest {
         first[0] = "content://media/external/images/media/99"
 
         assertEquals(arrayOf(uri).toList(), saved.contentUriValues().toList())
+    }
+
+    @Test
+    fun `capture rejects recycle bin restore authority`() {
+        val pending = AndroidMediaMutationPendingStates.capture(
+            AndroidMediaMutationMode.RESTORE,
+            listOf("content://media/external/images/media/42"),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            GalleryMediaMutationSavedStates.capture(pending)
+        }
     }
 
     @Test
