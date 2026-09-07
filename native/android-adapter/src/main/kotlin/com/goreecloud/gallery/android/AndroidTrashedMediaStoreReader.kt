@@ -2,81 +2,30 @@ package com.goreecloud.gallery.android
 
 import android.content.ContentResolver
 import android.database.Cursor
+import android.os.Build
+import android.os.Bundle
 import android.provider.MediaStore
 import com.goreecloud.gallery.core.MediaItem
 import com.goreecloud.gallery.core.MediaStoreProjection
 import com.goreecloud.gallery.core.MediaStoreRow
 
 /**
- * Android column contract paired with the provider-neutral native core projection.
- * Keeping this list explicit makes drift between Android framework constants and the core adapter
- * contract detectable in unit tests instead of at device runtime.
- */
-object AndroidMediaStoreProjection {
-    val columns: List<String> = listOf(
-        MediaStore.MediaColumns._ID,
-        MediaStore.MediaColumns.DISPLAY_NAME,
-        MediaStore.MediaColumns.MIME_TYPE,
-        MediaStore.MediaColumns.DATE_TAKEN,
-        MediaStore.MediaColumns.DATE_MODIFIED,
-        MediaStore.MediaColumns.WIDTH,
-        MediaStore.MediaColumns.HEIGHT,
-        MediaStore.MediaColumns.DURATION,
-        MediaStore.MediaColumns.SIZE,
-        MediaStore.MediaColumns.BUCKET_ID,
-        MediaStore.MediaColumns.BUCKET_DISPLAY_NAME,
-    )
-
-    init {
-        check(columns == MediaStoreProjection.columns) {
-            "Android MediaStore columns drifted from the native core projection"
-        }
-    }
-}
-
-/**
- * Projects rows discovered through MediaStore.Files onto the media-specific item collections that
- * Android's write/trash/delete request APIs accept. Browsing can remain a single bounded Files
- * query, while MediaItem content URIs retain their canonical image/video identity.
+ * Reads only Android MediaStore items whose authoritative IS_TRASHED state is set.
  *
- * The projection itself is deliberately pure so local JVM tests can validate URI identity without
- * depending on Android framework method execution. Runtime provider access remains Android-owned.
+ * This reader deliberately keeps Android MediaStore as the Trash authority. It does not create an
+ * app-private duplicate trash database, broaden filesystem access, or infer deleted state from a
+ * Gallery-owned list. Android 11+ is required because QUERY_ARG_MATCH_TRASHED was added in API 30.
+ * The provider request itself is bounded to the same validated row ceiling enforced while consuming
+ * the returned cursor, so a cooperative MediaStore provider need not materialize an unnecessarily
+ * large Trash result merely for Gallery to discard rows past its Development presentation bound.
  */
-internal object AndroidMediaStoreItemUris {
-    fun collectionUriForMimeType(volumeName: String, mimeType: String): String {
-        val normalizedVolume = volumeName.trim()
-        require(normalizedVolume.isNotEmpty()) { "MediaStore volume name is required" }
-        require('/' !in normalizedVolume) { "MediaStore volume name must not contain a path separator" }
-
-        val normalizedMimeType = mimeType.trim().lowercase()
-        val collectionPath = when {
-            normalizedMimeType.startsWith("image/") -> "images/media"
-            normalizedMimeType.startsWith("video/") -> "video/media"
-            else -> throw IllegalArgumentException("MediaStore row must be image or video content")
-        }
-        return "content://${MediaStore.AUTHORITY}/$normalizedVolume/$collectionPath"
-    }
-}
-
-data class AndroidMediaStoreReadResult(
-    val items: List<MediaItem>,
-    val rejectedRowCount: Int,
-)
-
-class MediaStoreQueryUnavailableException(message: String) : IllegalStateException(message)
-
-/**
- * First-party Android bridge from ContentResolver/MediaStore into the native Gallery core model.
- *
- * The query is owner-device local and selects only MediaStore image/video rows. The caller supplies
- * a strict maximum number of provider rows to inspect; malformed individual media rows are rejected
- * instead of being fabricated into Gallery state. A missing provider cursor fails the read instead
- * of being treated as an authoritative empty library.
- */
-class AndroidMediaStoreReader(
+class AndroidTrashedMediaStoreReader(
     private val contentResolver: ContentResolver,
 ) {
     fun readLatest(maxRows: Int = DEFAULT_MAX_ROWS): AndroidMediaStoreReadResult {
+        check(isSupported()) {
+            "Android MediaStore Trash browsing requires Android 11 or newer"
+        }
         require(maxRows in 1..MAX_ROWS) { "maxRows must be between 1 and $MAX_ROWS" }
 
         val collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -87,24 +36,30 @@ class AndroidMediaStoreReader(
             MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
         )
         val sortOrder = listOf(
-            "${MediaStore.MediaColumns.DATE_TAKEN} DESC",
             "${MediaStore.MediaColumns.DATE_MODIFIED} DESC",
             "${MediaStore.MediaColumns._ID} DESC",
         ).joinToString(", ")
+        val queryArgs = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, selectionArgs)
+            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sortOrder)
+            putInt(ContentResolver.QUERY_ARG_LIMIT, maxRows)
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_ONLY)
+        }
 
         val cursor = contentResolver.query(
             collection,
             AndroidMediaStoreProjection.columns.toTypedArray(),
-            selection,
-            selectionArgs,
-            sortOrder,
-        ) ?: throw MediaStoreQueryUnavailableException("MediaStore query returned no cursor")
+            queryArgs,
+            null,
+        ) ?: throw MediaStoreQueryUnavailableException("MediaStore Trash query returned no cursor")
 
         cursor.use {
             val indices = ColumnIndices.from(it)
             val items = ArrayList<MediaItem>(minOf(maxRows, 64))
             var rejected = 0
             var inspected = 0
+            // Keep the consumer-side ceiling even when an OEM/provider ignores QUERY_ARG_LIMIT.
             while (inspected < maxRows && it.moveToNext()) {
                 inspected += 1
                 try {
@@ -170,9 +125,13 @@ class AndroidMediaStoreReader(
         }
     }
 
-    private companion object {
+    companion object {
+        const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
         const val DEFAULT_MAX_ROWS = 250
         const val MAX_ROWS = 500
+
+        fun isSupported(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
+            apiLevel >= MIN_SUPPORTED_API
     }
 }
 
