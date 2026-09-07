@@ -90,6 +90,7 @@ class GalleryActivity : Activity() {
     private var showingFavorites = false
     private var searchQuery = ""
     private var viewerOverlay: View? = null
+    private var viewerVideoSurface: GalleryVideoPlayerSurface? = null
     private var pendingMediaMutation: AndroidMediaMutationPendingState? = null
 
     private val inSelectionMode: Boolean
@@ -119,9 +120,18 @@ class GalleryActivity : Activity() {
         super.onSaveInstanceState(outState)
     }
 
+    override fun onPause() {
+        viewerVideoSurface?.pauseForHost()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
-        if (viewerOverlay != null || pendingMediaMutation != null) return
+        if (viewerOverlay != null) {
+            viewerVideoSurface?.resumeForHost()
+            return
+        }
+        if (pendingMediaMutation != null) return
         if (destination == GalleryDestination.SETTINGS) {
             renderCurrentDestination()
         } else {
@@ -173,6 +183,11 @@ class GalleryActivity : Activity() {
         )
 
     override fun onDestroy() {
+        viewerVideoSurface?.apply {
+            onPlaybackError = null
+            stop()
+        }
+        viewerVideoSurface = null
         thumbnailExecutor.shutdownNow()
         thumbnailCache.evictAll()
         super.onDestroy()
@@ -1479,6 +1494,11 @@ class GalleryActivity : Activity() {
             persistFavorites()
         }
 
+        viewerVideoSurface?.apply {
+            onPlaybackError = null
+            stop()
+        }
+        viewerVideoSurface = null
         viewerOverlay?.let { rootFrame.removeView(it) }
         viewerOverlay = null
         clearSelection(render = false)
@@ -1529,12 +1549,27 @@ class GalleryActivity : Activity() {
         @Suppress("DEPRECATION")
         run { window.decorView.systemUiVisibility = 0 }
 
+        val mediaHost = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+        }
         val preview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.BLACK)
         }
-        overlay.addView(
+        mediaHost.addView(
             preview,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        val videoSurface = GalleryVideoPlayerSurface(this).apply {
+            visibility = View.GONE
+        }
+        viewerVideoSurface = videoSurface
+        mediaHost.addView(
+            videoSurface,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+        overlay.addView(
+            mediaHost,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
                 topMargin = dp(72)
                 bottomMargin = dp(104)
@@ -1641,7 +1676,25 @@ class GalleryActivity : Activity() {
             },
         )
 
+        val playbackToggle = viewerAction("Play", true, "Play video") {}.apply {
+            visibility = View.GONE
+        }
+        overlay.addView(
+            playbackToggle,
+            FrameLayout.LayoutParams(dp(104), dp(48)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                bottomMargin = dp(96)
+            },
+        )
+        videoSurface.onPlaybackError = { _, _ ->
+            videoSurface.visibility = View.GONE
+            preview.visibility = View.VISIBLE
+            playbackToggle.visibility = View.GONE
+            Toast.makeText(this, "Video playback is unavailable for this item.", Toast.LENGTH_SHORT).show()
+        }
+
         var currentIndex = initialIndex
+        var activePlaybackPlan: GalleryViewerPlaybackPlan? = null
 
         fun renderCurrentItem() {
             if (
@@ -1653,6 +1706,13 @@ class GalleryActivity : Activity() {
                 return
             }
             val item = items[currentIndex]
+            val playbackPlan = GalleryViewerPlaybackPolicy.plan(item, currentUserSettings())
+            activePlaybackPlan = playbackPlan
+            videoSurface.stop()
+            videoSurface.visibility = View.GONE
+            playbackToggle.visibility = View.GONE
+            preview.visibility = View.VISIBLE
+
             val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
             preview.setImageDrawable(null)
             preview.tag = viewerCacheKey
@@ -1667,6 +1727,40 @@ class GalleryActivity : Activity() {
             favorite.text = if (isFavorite) "♥ Saved" else "♡ Favorite"
             favorite.contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
             loadLocalThumbnail(item, preview, generation, VIEWER_THUMBNAIL_DP, VIEWER_THUMBNAIL_NAMESPACE)
+
+            if (playbackPlan.presentation == GalleryViewerPresentation.VIDEO_PLAYBACK) {
+                try {
+                    videoSurface.load(item.contentUri, playbackPlan)
+                    videoSurface.visibility = View.VISIBLE
+                    playbackToggle.visibility = View.VISIBLE
+                    playbackToggle.text = if (playbackPlan.shouldAutoPlay) "Pause" else "Play"
+                    playbackToggle.contentDescription =
+                        if (playbackPlan.shouldAutoPlay) "Pause video" else "Play video"
+                } catch (_: IllegalArgumentException) {
+                    videoSurface.visibility = View.GONE
+                    playbackToggle.visibility = View.GONE
+                    Toast.makeText(this, "Gallery refused an invalid video item URI.", Toast.LENGTH_SHORT).show()
+                } catch (_: RuntimeException) {
+                    videoSurface.visibility = View.GONE
+                    playbackToggle.visibility = View.GONE
+                    Toast.makeText(this, "Video playback is unavailable for this item.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        playbackToggle.setOnClickListener {
+            val plan = activePlaybackPlan ?: return@setOnClickListener
+            if (plan.presentation != GalleryViewerPresentation.VIDEO_PLAYBACK || !videoSurface.hasLoadedVideo()) {
+                return@setOnClickListener
+            }
+            if (videoSurface.isPlaying()) {
+                videoSurface.pause()
+                playbackToggle.text = "Play"
+                playbackToggle.contentDescription = "Play video"
+            } else if (videoSurface.play()) {
+                playbackToggle.text = "Pause"
+                playbackToggle.contentDescription = "Pause video"
+            }
         }
 
         previous.setOnClickListener {
@@ -1706,6 +1800,11 @@ class GalleryActivity : Activity() {
 
     private fun closeAuthorizedViewer() {
         val overlay = viewerOverlay ?: return
+        viewerVideoSurface?.apply {
+            onPlaybackError = null
+            stop()
+        }
+        viewerVideoSurface = null
         rootFrame.removeView(overlay)
         viewerOverlay = null
         applySystemChrome()
@@ -1803,14 +1902,14 @@ class GalleryActivity : Activity() {
         library.addView(
             settingToggleRow(
                 title = "Play videos automatically",
-                subtitle = "Preference is saved now and will apply when native video playback is enabled.",
+                subtitle = "When on, videos begin playing automatically when opened in the viewer.",
                 checked = settings.playVideosAutomatically,
             ) { setBooleanSetting(PLAY_VIDEOS_AUTOMATICALLY_KEY, it) },
         )
         library.addView(
             settingToggleRow(
                 title = "Loop videos",
-                subtitle = "Preference is saved now and will apply when native video playback is enabled.",
+                subtitle = "When on, videos repeat continuously while they remain open in the viewer.",
                 checked = settings.loopVideos,
             ) { setBooleanSetting(LOOP_VIDEOS_KEY, it) },
         )
