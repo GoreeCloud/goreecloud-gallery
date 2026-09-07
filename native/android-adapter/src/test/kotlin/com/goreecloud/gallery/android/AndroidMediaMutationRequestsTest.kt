@@ -148,7 +148,7 @@ class AndroidMediaMutationRequestsTest {
 
     @Test
     fun `normalization rejects an oversized aggregate content uri scope`() {
-        val uris = (1..70).map { id ->
+        val uris = (1..71).map { id ->
             val volume = "v$id-" + "a".repeat(900)
             "content://media/$volume/images/media/$id"
         }
