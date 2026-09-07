@@ -1,0 +1,317 @@
+name: Temporary Gallery Viewer Video Integration
+
+on:
+  push:
+    branches:
+      - agent/gallery-viewer-video-integration
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/gallery-viewer-video-integration
+          fetch-depth: 0
+
+      - name: Integrate native video playback into the normal viewer
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('native/app/src/main/kotlin/com/goreecloud/gallery/GalleryActivity.kt')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+          '''    private var searchQuery = ""
+              private var viewerOverlay: View? = null
+              private var pendingMediaMutation: AndroidMediaMutationPendingState? = null
+          ''',
+          '''    private var searchQuery = ""
+              private var viewerOverlay: View? = null
+              private var viewerVideoSurface: GalleryVideoPlayerSurface? = null
+              private var pendingMediaMutation: AndroidMediaMutationPendingState? = null
+          ''')
+
+          replace_once(
+          '''    override fun onResume() {
+                  super.onResume()
+                  if (viewerOverlay != null || pendingMediaMutation != null) return
+          ''',
+          '''    override fun onPause() {
+                  viewerVideoSurface?.pauseForHost()
+                  super.onPause()
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  if (viewerOverlay != null) {
+                      viewerVideoSurface?.resumeForHost()
+                      return
+                  }
+                  if (pendingMediaMutation != null) return
+          ''')
+
+          replace_once(
+          '''    override fun onDestroy() {
+                  thumbnailExecutor.shutdownNow()
+                  thumbnailCache.evictAll()
+                  super.onDestroy()
+              }
+          ''',
+          '''    override fun onDestroy() {
+                  viewerVideoSurface?.apply {
+                      onPlaybackError = null
+                      stop()
+                  }
+                  viewerVideoSurface = null
+                  thumbnailExecutor.shutdownNow()
+                  thumbnailCache.evictAll()
+                  super.onDestroy()
+              }
+          ''')
+
+          replace_once(
+          '''        viewerOverlay?.let { rootFrame.removeView(it) }
+                  viewerOverlay = null
+                  clearSelection(render = false)
+          ''',
+          '''        viewerVideoSurface?.apply {
+                      onPlaybackError = null
+                      stop()
+                  }
+                  viewerVideoSurface = null
+                  viewerOverlay?.let { rootFrame.removeView(it) }
+                  viewerOverlay = null
+                  clearSelection(render = false)
+          ''')
+
+          replace_once(
+          '''        val preview = ImageView(this).apply {
+                      scaleType = ImageView.ScaleType.FIT_CENTER
+                      setBackgroundColor(Color.BLACK)
+                  }
+                  overlay.addView(
+                      preview,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                          topMargin = dp(72)
+                          bottomMargin = dp(104)
+                      },
+                  )
+          ''',
+          '''        val mediaHost = FrameLayout(this).apply {
+                      setBackgroundColor(Color.BLACK)
+                  }
+                  val preview = ImageView(this).apply {
+                      scaleType = ImageView.ScaleType.FIT_CENTER
+                      setBackgroundColor(Color.BLACK)
+                  }
+                  mediaHost.addView(
+                      preview,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                  )
+                  val videoSurface = GalleryVideoPlayerSurface(this).apply {
+                      visibility = View.GONE
+                  }
+                  viewerVideoSurface = videoSurface
+                  mediaHost.addView(
+                      videoSurface,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                  )
+                  overlay.addView(
+                      mediaHost,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                          topMargin = dp(72)
+                          bottomMargin = dp(104)
+                      },
+                  )
+          ''')
+
+          replace_once(
+          '''        overlay.addView(
+                      bottomBar,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)).apply {
+                          gravity = Gravity.BOTTOM
+                          marginStart = dp(10)
+                          marginEnd = dp(10)
+                          bottomMargin = dp(16)
+                      },
+                  )
+
+                  var currentIndex = initialIndex
+          ''',
+          '''        overlay.addView(
+                      bottomBar,
+                      FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)).apply {
+                          gravity = Gravity.BOTTOM
+                          marginStart = dp(10)
+                          marginEnd = dp(10)
+                          bottomMargin = dp(16)
+                      },
+                  )
+
+                  val playbackToggle = viewerAction("Play", true, "Play video") {}.apply {
+                      visibility = View.GONE
+                  }
+                  overlay.addView(
+                      playbackToggle,
+                      FrameLayout.LayoutParams(dp(104), dp(48)).apply {
+                          gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+                          bottomMargin = dp(96)
+                      },
+                  )
+                  videoSurface.onPlaybackError = { _, _ ->
+                      videoSurface.visibility = View.GONE
+                      preview.visibility = View.VISIBLE
+                      playbackToggle.visibility = View.GONE
+                      Toast.makeText(this, "Video playback is unavailable for this item.", Toast.LENGTH_SHORT).show()
+                  }
+
+                  var currentIndex = initialIndex
+                  var activePlaybackPlan: GalleryViewerPlaybackPlan? = null
+          ''')
+
+          replace_once(
+          '''            val item = items[currentIndex]
+                      val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
+                      preview.setImageDrawable(null)
+                      preview.tag = viewerCacheKey
+                      preview.contentDescription = "Viewer for ${item.displayName}"
+                      viewerTitle.text = item.displayName
+                      viewerSubtitle.text = mediaMetadata(item)
+                      previous.isEnabled = currentIndex > 0
+                      previous.alpha = if (previous.isEnabled) 1f else 0.30f
+                      next.isEnabled = currentIndex < items.lastIndex
+                      next.alpha = if (next.isEnabled) 1f else 0.30f
+                      val isFavorite = item.contentUri in favoriteUris
+                      favorite.text = if (isFavorite) "♥ Saved" else "♡ Favorite"
+                      favorite.contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+                      loadLocalThumbnail(item, preview, generation, VIEWER_THUMBNAIL_DP, VIEWER_THUMBNAIL_NAMESPACE)
+          ''',
+          '''            val item = items[currentIndex]
+                      val playbackPlan = GalleryViewerPlaybackPolicy.plan(item, currentUserSettings())
+                      activePlaybackPlan = playbackPlan
+                      videoSurface.stop()
+                      videoSurface.visibility = View.GONE
+                      playbackToggle.visibility = View.GONE
+                      preview.visibility = View.VISIBLE
+
+                      val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
+                      preview.setImageDrawable(null)
+                      preview.tag = viewerCacheKey
+                      preview.contentDescription = "Viewer for ${item.displayName}"
+                      viewerTitle.text = item.displayName
+                      viewerSubtitle.text = mediaMetadata(item)
+                      previous.isEnabled = currentIndex > 0
+                      previous.alpha = if (previous.isEnabled) 1f else 0.30f
+                      next.isEnabled = currentIndex < items.lastIndex
+                      next.alpha = if (next.isEnabled) 1f else 0.30f
+                      val isFavorite = item.contentUri in favoriteUris
+                      favorite.text = if (isFavorite) "♥ Saved" else "♡ Favorite"
+                      favorite.contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+                      loadLocalThumbnail(item, preview, generation, VIEWER_THUMBNAIL_DP, VIEWER_THUMBNAIL_NAMESPACE)
+
+                      if (playbackPlan.presentation == GalleryViewerPresentation.VIDEO_PLAYBACK) {
+                          try {
+                              videoSurface.load(item.contentUri, playbackPlan)
+                              videoSurface.visibility = View.VISIBLE
+                              playbackToggle.visibility = View.VISIBLE
+                              playbackToggle.text = if (playbackPlan.shouldAutoPlay) "Pause" else "Play"
+                              playbackToggle.contentDescription =
+                                  if (playbackPlan.shouldAutoPlay) "Pause video" else "Play video"
+                          } catch (_: IllegalArgumentException) {
+                              videoSurface.visibility = View.GONE
+                              playbackToggle.visibility = View.GONE
+                              Toast.makeText(this, "Gallery refused an invalid video item URI.", Toast.LENGTH_SHORT).show()
+                          } catch (_: RuntimeException) {
+                              videoSurface.visibility = View.GONE
+                              playbackToggle.visibility = View.GONE
+                              Toast.makeText(this, "Video playback is unavailable for this item.", Toast.LENGTH_SHORT).show()
+                          }
+                      }
+          ''')
+
+          replace_once(
+          '''        previous.setOnClickListener {
+          ''',
+          '''        playbackToggle.setOnClickListener {
+                      val plan = activePlaybackPlan ?: return@setOnClickListener
+                      if (plan.presentation != GalleryViewerPresentation.VIDEO_PLAYBACK || !videoSurface.hasLoadedVideo()) {
+                          return@setOnClickListener
+                      }
+                      if (videoSurface.isPlaying()) {
+                          videoSurface.pause()
+                          playbackToggle.text = "Play"
+                          playbackToggle.contentDescription = "Play video"
+                      } else if (videoSurface.play()) {
+                          playbackToggle.text = "Pause"
+                          playbackToggle.contentDescription = "Pause video"
+                      }
+                  }
+
+                  previous.setOnClickListener {
+          ''')
+
+          replace_once(
+          '''    private fun closeAuthorizedViewer() {
+                  val overlay = viewerOverlay ?: return
+                  rootFrame.removeView(overlay)
+                  viewerOverlay = null
+                  applySystemChrome()
+                  renderCurrentDestination()
+              }
+          ''',
+          '''    private fun closeAuthorizedViewer() {
+                  val overlay = viewerOverlay ?: return
+                  viewerVideoSurface?.apply {
+                      onPlaybackError = null
+                      stop()
+                  }
+                  viewerVideoSurface = null
+                  rootFrame.removeView(overlay)
+                  viewerOverlay = null
+                  applySystemChrome()
+                  renderCurrentDestination()
+              }
+          ''')
+
+          text = text.replace(
+              'subtitle = "Preference is saved now and will apply when native video playback is enabled.",',
+              'subtitle = "When on, videos begin playing automatically when opened in the viewer.",',
+              1,
+          )
+          text = text.replace(
+              'subtitle = "Preference is saved now and will apply when native video playback is enabled.",',
+              'subtitle = "When on, videos repeat continuously while they remain open in the viewer.",',
+              1,
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Commit viewer integration
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native/app/src/main/kotlin/com/goreecloud/gallery/GalleryActivity.kt
+          if git diff --cached --quiet; then
+            echo "No source changes were required."
+            exit 0
+          fi
+          git commit -m "Mount native video playback in the Gallery viewer"
+          git push origin HEAD:agent/gallery-viewer-video-integration
