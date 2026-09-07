@@ -5,7 +5,6 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import java.net.URI
 import java.util.Collections
 
 /**
@@ -40,11 +39,8 @@ class AndroidMediaMutationRequest internal constructor(
 object AndroidMediaMutationRequests {
     const val MIN_SUPPORTED_API = Build.VERSION_CODES.R
     const val MAX_MUTATION_ITEMS = 100
-    const val MAX_CONTENT_URI_CHARACTERS = 1024
+    const val MAX_CONTENT_URI_CHARACTERS = AndroidMediaStoreItemUriPolicy.MAX_CONTENT_URI_CHARACTERS
     const val MAX_TOTAL_CONTENT_URI_CHARACTERS = 64 * 1024
-
-    private val canonicalMediaStoreItemPath =
-        Regex("^/([A-Za-z0-9_-]+)/(images|video)/media/([1-9][0-9]*)$")
 
     fun isSupported(apiLevel: Int = Build.VERSION.SDK_INT): Boolean =
         apiLevel >= MIN_SUPPORTED_API
@@ -85,14 +81,7 @@ object AndroidMediaMutationRequests {
         val seen = HashSet<String>(contentUris.size)
         var totalUriCharacters = 0
         contentUris.forEach { raw ->
-            val value = raw.trim()
-            require(value.isNotEmpty()) { "media content URIs must not be blank" }
-            require(value == raw) {
-                "MediaStore mutation URIs must already use their exact canonical form"
-            }
-            require(value.length <= MAX_CONTENT_URI_CHARACTERS) {
-                "MediaStore mutation URI exceeds the supported size bound"
-            }
+            val value = AndroidMediaStoreItemUriPolicy.requireCanonicalItemUri(raw)
             totalUriCharacters += value.length
             require(totalUriCharacters <= MAX_TOTAL_CONTENT_URI_CHARACTERS) {
                 "MediaStore mutation URI scope exceeds the supported saved-state size bound"
@@ -100,39 +89,9 @@ object AndroidMediaMutationRequests {
             require(seen.add(value)) {
                 "MediaStore mutation URIs must be unique"
             }
-            val parsed = try {
-                URI(value)
-            } catch (error: Exception) {
-                throw IllegalArgumentException("invalid media content URI", error)
-            }
-            require(parsed.scheme == "content") { "only content URIs may be mutated" }
-            require(parsed.authority == MediaStore.AUTHORITY) {
-                "only Android MediaStore URIs may be mutated"
-            }
-            require(parsed.rawQuery == null && parsed.rawFragment == null) {
-                "MediaStore mutation URIs must not include query parameters or fragments"
-            }
-            require(parsed.userInfo == null && parsed.port == -1) {
-                "MediaStore mutation URIs must use the canonical content authority form"
-            }
-            require(parsed.rawPath == parsed.path && '\\' !in parsed.rawPath.orEmpty()) {
-                "MediaStore mutation paths must not use encoded or backslash path controls"
-            }
-            requireSpecificImageOrVideoItem(parsed)
             normalized += value
         }
 
         return normalized
-    }
-
-    private fun requireSpecificImageOrVideoItem(uri: URI) {
-        val path = uri.rawPath.orEmpty()
-        val match = canonicalMediaStoreItemPath.matchEntire(path)
-        require(match != null) {
-            "MediaStore mutation URI must use /<volume>/(images|video)/media/<positive canonical id>"
-        }
-        require(match.groupValues[3].toLongOrNull() != null) {
-            "MediaStore mutation URI item ID exceeds the supported numeric range"
-        }
     }
 }
