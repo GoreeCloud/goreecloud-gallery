@@ -44,7 +44,7 @@ data class GalleryVideoPlaybackProgress private constructor(
         if (durationMillis == null) this else copy(positionMillis = durationMillis)
 
     companion object {
-        const val MAX_PLATFORM_SEEK_MILLIS: Long = Int.MAX_VALUE.toLong()
+        const val MAX_PLATFORM_SEEK_MILLIS: Long = 2147483647L
 
         fun initial(plan: GalleryViewerPlaybackPlan): GalleryVideoPlaybackProgress {
             require(plan.presentation == GalleryViewerPresentation.VIDEO_PLAYBACK) {
