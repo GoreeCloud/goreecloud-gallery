@@ -233,12 +233,13 @@ class PhotoEditorActivity : Activity() {
     ) {
         val control = editorButton(label, description) {
             if (!working) onClick()
+        }.apply {
+            minWidth = dp(72)
         }
         editControls += control
         row.addView(
             control,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(60)).apply {
-                minWidth = dp(72)
                 marginEnd = dp(4)
             },
         )
