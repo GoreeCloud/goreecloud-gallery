@@ -3,6 +3,7 @@ package com.goreecloud.gallery
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
 import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
@@ -21,6 +22,7 @@ import android.util.Size
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -1532,6 +1534,7 @@ class GalleryActivity : Activity() {
         val preview = ImageView(this).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER
             setBackgroundColor(Color.BLACK)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
         overlay.addView(
             preview,
@@ -1610,7 +1613,7 @@ class GalleryActivity : Activity() {
 
         val share = viewerAction("Share", true, "Share this media") {}
         val favorite = viewerAction("Favorite", true, "Favorite this media") {}
-        val edit = viewerAction("Edit", false, "Edit is unavailable in this Development build") {}
+        val edit = viewerAction("Edit", true, "Edit this photo") {}
         val deleteSupported = AndroidMediaMutationRequests.isSupported()
         val delete = viewerAction(
             "Delete",
@@ -1656,7 +1659,7 @@ class GalleryActivity : Activity() {
             val viewerCacheKey = thumbnailCacheKey(VIEWER_THUMBNAIL_NAMESPACE, item.contentUri)
             preview.setImageDrawable(null)
             preview.tag = viewerCacheKey
-            preview.contentDescription = "Viewer for ${item.displayName}"
+            preview.contentDescription = "Viewer for ${item.displayName}. Swipe left or right to navigate the current collection."
             viewerTitle.text = item.displayName
             viewerSubtitle.text = mediaMetadata(item)
             previous.isEnabled = currentIndex > 0
@@ -1666,6 +1669,16 @@ class GalleryActivity : Activity() {
             val isFavorite = item.contentUri in favoriteUris
             favorite.text = if (isFavorite) "♥ Saved" else "♡ Favorite"
             favorite.contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites"
+            val photoEditable = item.mimeType.startsWith("image/")
+            edit.isEnabled = photoEditable
+            edit.isClickable = photoEditable
+            edit.isFocusable = photoEditable
+            edit.alpha = if (photoEditable) 1f else 0.35f
+            edit.contentDescription = if (photoEditable) {
+                "Edit this photo using an Android photo editor"
+            } else {
+                "Photo editing is unavailable for this media type"
+            }
             loadLocalThumbnail(item, preview, generation, VIEWER_THUMBNAIL_DP, VIEWER_THUMBNAIL_NAMESPACE)
         }
 
@@ -1681,6 +1694,45 @@ class GalleryActivity : Activity() {
                 renderCurrentItem()
             }
         }
+
+        var swipeStartX = 0f
+        var swipeStartY = 0f
+        preview.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = event.x
+                    swipeStartY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    when (
+                        GalleryViewerSwipePolicy.resolve(
+                            deltaX = event.x - swipeStartX,
+                            deltaY = event.y - swipeStartY,
+                            minimumDistancePx = dp(VIEWER_SWIPE_DISTANCE_DP).toFloat(),
+                            canGoPrevious = currentIndex > 0,
+                            canGoNext = currentIndex < items.lastIndex,
+                        )
+                    ) {
+                        GalleryViewerSwipeAction.PREVIOUS -> {
+                            currentIndex -= 1
+                            renderCurrentItem()
+                            announceForAccessibility("Previous media")
+                        }
+                        GalleryViewerSwipeAction.NEXT -> {
+                            currentIndex += 1
+                            renderCurrentItem()
+                            announceForAccessibility("Next media")
+                        }
+                        GalleryViewerSwipeAction.NONE -> Unit
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> false
+                else -> true
+            }
+        }
+
         share.setOnClickListener {
             val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
             shareAuthorizedItem(item)
@@ -1689,6 +1741,10 @@ class GalleryActivity : Activity() {
             val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
             toggleFavorite(item)
             renderCurrentItem()
+        }
+        edit.setOnClickListener {
+            val item = items.getOrNull(currentIndex) ?: return@setOnClickListener
+            editAuthorizedPhoto(item)
         }
         if (deleteSupported) {
             delete.setOnClickListener {
@@ -1723,6 +1779,43 @@ class GalleryActivity : Activity() {
             startActivity(Intent.createChooser(shareIntent, "Share with"))
         } catch (_: RuntimeException) {
             Toast.makeText(this, "No compatible share destination is available.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun editAuthorizedPhoto(item: MediaItem) {
+        if (!item.mimeType.startsWith("image/")) return
+        if (
+            !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
+            authorizedItems.none { it.contentUri == item.contentUri }
+        ) {
+            Toast.makeText(this, "This photo is no longer authorized for editing.", Toast.LENGTH_SHORT).show()
+            closeAuthorizedViewer()
+            return
+        }
+
+        val uri = Uri.parse(item.contentUri)
+        val grantFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val editIntent = Intent(Intent.ACTION_EDIT).apply {
+            setDataAndType(uri, item.mimeType)
+            clipData = ClipData.newRawUri(item.displayName, uri)
+            addFlags(grantFlags)
+        }
+        if (editIntent.resolveActivity(packageManager) == null) {
+            Toast.makeText(this, "No compatible photo editor is installed.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val chooser = Intent.createChooser(editIntent, "Edit photo").apply {
+            addFlags(grantFlags)
+        }
+        try {
+            closeAuthorizedViewer()
+            thumbnailCache.evictAll()
+            startActivity(chooser)
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "Android did not grant this editor access to the photo.", Toast.LENGTH_SHORT).show()
+        } catch (_: RuntimeException) {
+            Toast.makeText(this, "The photo editor could not be opened.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2744,6 +2837,7 @@ class GalleryActivity : Activity() {
         const val ALBUM_CORNER_DP = 16
         const val ALBUM_THUMBNAIL_DP = 320
         const val VIEWER_THUMBNAIL_DP = 720
+        const val VIEWER_SWIPE_DISTANCE_DP = 56
         const val THUMBNAIL_CACHE_KIB = 8 * 1024
         const val GRID_THUMBNAIL_NAMESPACE = "grid"
         const val ALBUM_THUMBNAIL_NAMESPACE = "album"
