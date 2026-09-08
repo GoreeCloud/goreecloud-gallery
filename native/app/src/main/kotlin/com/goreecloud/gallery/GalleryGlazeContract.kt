@@ -1,14 +1,16 @@
 package com.goreecloud.gallery
 
 /**
- * Repository-local GLAZE UI V1.0 source contract consumed by the first-party native Gallery shell.
+ * Repository-local GLAZE UI 1.0.0 source contract consumed by the first-party native Gallery shell.
  *
- * Gallery's authoritative project specification currently names GLAZE UI V1.0 / 1.0.0 as the only
- * current application target. Broader Glaze records contain a conflicting V1.1 policy statement;
- * that cross-project discrepancy must be resolved in the canonical Glaze records rather than
- * silently changing Gallery's product-specific authority here.
+ * This VERSION describes the source that is actually mapped by the current native implementation;
+ * it is not the current GoreeCloud consumer requirement. The live platform requirement is GLAZE UI
+ * V1.3 / 1.3.0 Adaptive Resonance. Gallery therefore remains migration-required until its native
+ * source is deliberately migrated to the current Stable line and application-specific rendered,
+ * accessibility, adaptive, representative-device, rollback, and release acceptance is repeated.
  *
- * Rendered accessibility and representative-device acceptance remain separate release gates.
+ * Do not change VERSION merely to match the required target. It must move only with the reviewed
+ * source migration that implements and validates the corresponding Gallery contract.
  */
 object GalleryGlazeContract {
     const val VERSION = "1.0.0"
