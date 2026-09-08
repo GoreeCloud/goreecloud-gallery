@@ -1,7 +1,6 @@
 package com.goreecloud.gallery
 
 import android.app.Activity
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
@@ -260,7 +259,7 @@ class PhotoEditorActivity : Activity() {
                     editPlan = GalleryPhotoEditPolicy.reset()
                     renderPlanPreview()
                 }
-            } catch (tooLarge: GalleryPhotoTooLargeException) {
+            } catch (_: GalleryPhotoTooLargeException) {
                 showLoadFailure(
                     generation,
                     "This photo is too large for the current first-party editor. Gallery left the original untouched.",
@@ -336,14 +335,15 @@ class PhotoEditorActivity : Activity() {
         editorExecutor.execute {
             var output: Bitmap? = null
             try {
-                output = GalleryBitmapEditor.crop(rendered, crop)
+                val editedBitmap = GalleryBitmapEditor.crop(rendered, crop)
+                output = editedBitmap
                 val saved = GalleryEditedMediaStore(contentResolver).saveCopy(
                     sourceUri = source,
                     sourceDisplayName = sourceDisplayName,
                     sourceMimeType = sourceMimeType,
-                    bitmap = output,
+                    bitmap = editedBitmap,
                 )
-                if (output !== rendered) output.recycle()
+                if (editedBitmap !== rendered) editedBitmap.recycle()
                 runOnUiThread {
                     if (isFinishing) return@runOnUiThread
                     Toast.makeText(this, "Saved ${saved.displayName}", Toast.LENGTH_SHORT).show()
@@ -369,6 +369,12 @@ class PhotoEditorActivity : Activity() {
             cropOverlay.visibility = View.INVISIBLE
             preview.setImageDrawable(null)
             setWorking(false, message)
+            editControls.forEach {
+                it.isEnabled = false
+                it.isClickable = false
+                it.isFocusable = false
+                it.alpha = 0.35f
+            }
             saveButton.isEnabled = false
             saveButton.isClickable = false
             saveButton.isFocusable = false
