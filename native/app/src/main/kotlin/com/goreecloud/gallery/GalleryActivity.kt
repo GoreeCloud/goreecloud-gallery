@@ -1783,7 +1783,10 @@ class GalleryActivity : Activity() {
     }
 
     private fun editAuthorizedPhoto(item: MediaItem) {
-        if (!item.mimeType.startsWith("image/")) return
+        if (!GalleryPhotoEditorContract.isSupportedMimeType(item.mimeType)) {
+            Toast.makeText(this, "This photo format is not yet supported by the Gallery editor.", Toast.LENGTH_SHORT).show()
+            return
+        }
         if (
             !GalleryMediaAccessPolicy.canRead(currentMediaAccessScope()) ||
             authorizedItems.none { it.contentUri == item.contentUri }
@@ -1794,28 +1797,21 @@ class GalleryActivity : Activity() {
         }
 
         val uri = Uri.parse(item.contentUri)
-        val grantFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        val editIntent = Intent(Intent.ACTION_EDIT).apply {
-            setDataAndType(uri, item.mimeType)
-            clipData = ClipData.newRawUri(item.displayName, uri)
-            addFlags(grantFlags)
-        }
-        if (editIntent.resolveActivity(packageManager) == null) {
-            Toast.makeText(this, "No compatible photo editor is installed.", Toast.LENGTH_SHORT).show()
+        if (uri.scheme != "content" || uri.authority != "media") {
+            Toast.makeText(this, "Gallery refused an unsupported photo source.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val chooser = Intent.createChooser(editIntent, "Edit photo").apply {
-            addFlags(grantFlags)
+        val editorIntent = Intent(this, PhotoEditorActivity::class.java).apply {
+            putExtra(GalleryPhotoEditorContract.EXTRA_CONTENT_URI, item.contentUri)
+            putExtra(GalleryPhotoEditorContract.EXTRA_DISPLAY_NAME, item.displayName)
+            putExtra(GalleryPhotoEditorContract.EXTRA_MIME_TYPE, item.mimeType)
         }
         try {
             closeAuthorizedViewer()
-            thumbnailCache.evictAll()
-            startActivity(chooser)
-        } catch (_: SecurityException) {
-            Toast.makeText(this, "Android did not grant this editor access to the photo.", Toast.LENGTH_SHORT).show()
+            startActivity(editorIntent)
         } catch (_: RuntimeException) {
-            Toast.makeText(this, "The photo editor could not be opened.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "The Gallery photo editor could not be opened.", Toast.LENGTH_SHORT).show()
         }
     }
 
