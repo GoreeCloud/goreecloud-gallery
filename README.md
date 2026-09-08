@@ -17,28 +17,40 @@ See [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) for the replacement bou
 GoreeCloud Gallery is intended to remain:
 
 - offline-first and local-media focused;
-- independently installable as `com.goreecloud.gallery` when the native application is packaged;
+- independently installable as `com.goreecloud.gallery`;
 - governed by Android user/profile isolation and platform-authorized media access;
 - free of advertising and unnecessary tracking;
 - governed by the current Stable Glaze UI contract;
-- integrated substantively with Privacy Shield, Wardveil Security, and Everkeep where those platform responsibilities apply; and
+- integrated substantively with Privacy Shield, Wardveil Security, Everkeep, Manager, Mesh, and Identity where those platform responsibilities apply; and
 - honest about which capabilities are source foundations, packaged, device-accepted, released, or Stable.
 
 Optional GoreeCloud Photos integration may be added behind explicit adapters and user control. Local browsing must not depend on a GoreeCloud account, network connection, or cloud service.
 
 ## First-party native implementation
 
-The repository now contains GoreeCloud-owned native foundations under `native/`.
+The repository contains GoreeCloud-owned native foundations under `native/`.
 
 `native/core` provides framework-independent domain behavior for validated image/video media items, deterministic filtering and sorting, local mutation contracts, trash/recovery behavior, authoritative album metadata, deterministic album summaries, and MediaStore row normalization.
 
-`native/android-adapter` is a compiled Android library bridge over local `ContentResolver` / `MediaStore.Files`. It reads bounded image/video provider rows, fails rather than fabricating an empty library when no cursor is returned, rejects malformed rows, and maps accepted state into the native core model.
+`native/android-adapter` is a compiled Android library bridge over local `ContentResolver` / Android MediaStore. It reads bounded image/video provider rows, fails rather than fabricating an empty library when no cursor is returned, rejects malformed rows, and maps accepted state into the native core model.
 
-The current native application-shell development line adds `native/app`, a first-party Android application target using package ID `com.goreecloud.gallery`. It requires Android media authorization before provider reads, consumes the MediaStore adapter directly, renders a bounded recent-media list with local thumbnails, supports All / Images / Videos filtering and Newest / Oldest sorting over the already-authorized in-memory snapshot, and provides bounded local preview navigation within that presented snapshot. Filter and sort actions do not issue another MediaStore listing request.
+`native/app` is the first-party Android application target using package ID `com.goreecloud.gallery`. The active Development line requires Android media authorization before provider reads, consumes the MediaStore adapter directly, provides bounded local photo/video browsing, Albums and Recycle Bin flows, Favorites and settings behavior, bounded full-screen navigation, Android-authorized Trash/Restore/Purge actions, and a first-party photo-editor candidate with crop, 90-degree rotation, horizontal flip, Reset, and non-destructive Save copy semantics.
 
-The native shell maps the current Glaze UI 2.0.0 source contract through platform controls, a 48dp target floor, adaptive gutters, local light/dark presentation, and no network-delivered UI resources.
+The current native source still maps the repository-local `GalleryGlazeContract.VERSION = "1.0.0"`. That is **implemented source state**, not the current platform requirement. The live GoreeCloud consumer requirement is **GLAZE UI V1.3 / 1.3.0 — Adaptive Resonance**. Gallery is therefore `applicable-migration-required`; it must not be represented as current Glaze-conformant merely by changing labels or version strings. A reviewed native migration and fresh rendered, accessibility, adaptive, representative-device, Human Visual Excellence, rollback, release, and production acceptance remain required.
 
-These foundations do **not** yet constitute a released or Stable Gallery application. Image previews remain bounded, video preview is poster-only, and full-resolution viewing, playback, editing, sharing, destructive-operation acceptance, and broader album UX remain separate milestones. See [docs/native-mediastore-adapter.md](docs/native-mediastore-adapter.md) and [docs/native-android-app-shell.md](docs/native-android-app-shell.md).
+The current photo-editor candidate is Development evidence only. Representative physical-device/OEM/profile crop/rotate/flip/save-copy flows, source/output orientation fidelity, image-quality and metadata/color behavior, invalid/oversized/provider-failure/cancellation handling, process recreation, accessibility, current-Stable Glaze migration, Platform-System acceptance, signing, Release Candidate qualification, release approval, and Stable qualification remain open.
+
+## Platform Contract
+
+`goreecloud.platform.yaml` is the machine-readable declaration of Gallery's current GoreeCloud Platform Contract state. It deliberately separates:
+
+- the native Glaze source actually present today (`1.0.0`);
+- the current required Glaze consumer target (`1.3.0`);
+- Development lifecycle state;
+- blocked/unaccepted Platform-System integrations; and
+- outstanding representative-device, accessibility, recovery, signing, release, and Stable gates.
+
+The Platform Contract workflow validates that declaration against the pinned central contract authority. A green manifest check is evidence of declaration validity, not evidence that the blocked integrations or release gates are accepted.
 
 ## Transitional reconstruction line
 
@@ -58,13 +70,16 @@ Gallery must remain current with the applicable GoreeCloud platform systems:
 - **Glaze UI / Design Center** — interface, interaction, accessibility, responsiveness, and design-system conformance.
 - **Privacy Shield / Privacy Center** — media permissions, data minimization, privacy controls, consent, and user control.
 - **Wardveil Security / Security Center** — protection, validation, safe file/media handling boundaries, diagnostics, and evidence-backed security states.
-- **Everkeep / Continuity Center** — recovery, preservation, portability, continuity, and applicable local-media resilience workflows.
+- **Everkeep / Continuity Center** — recovery, preservation, portability, continuity, and applicable Gallery-owned state resilience.
+- **Manager** — accepted platform visibility and administrative integration where required.
+- **GoreeCloud Mesh** — authenticated cross-service registration/capability publication where required.
+- **GoreeCloud Identity** — any future account, device, session, Photos-account, or delegated-authority behavior.
 
 These are functional requirements, not decorative labels. Missing or unvalidated required integration blocks Stable qualification.
 
 ## Stable-release work
 
-The native application still requires substantial work before Stable qualification, including mature local albums and thumbnail browsing, full viewer/playback behavior, approved editing/sharing flows, destructive-operation authorization, hidden/excluded media policy, Android user/profile acceptance, rendered accessibility and Glaze UI acceptance, Privacy Shield/Wardveil/Everkeep integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
+The native application still requires substantial work before Stable qualification, including mature media/viewer/editor behavior, approved organization and sharing flows, destructive-operation edge-case acceptance, hidden/protected/excluded media policy, Android user/profile acceptance, rendered accessibility and current-Stable Glaze UI acceptance, applicable Privacy Shield/Wardveil/Everkeep/Manager/Mesh/Identity integration evidence, packaging/signing, upgrade/recovery validation, and representative physical-device testing.
 
 The old Fossify-based acceptance candidate is not a shortcut around those native acceptance gates.
 
@@ -75,10 +90,11 @@ The old Fossify-based acceptance candidate is not a shortcut around those native
 - [FEATURES.md](FEATURES.md) — implemented Development capabilities and incomplete work.
 - [BENEFITS.md](BENEFITS.md) — current and intended product benefits without Stable overclaiming.
 - [COMPETITIVE-OBJECTIVES.md](COMPETITIVE-OBJECTIVES.md) — current first-party product objectives.
+- [goreecloud.platform.yaml](goreecloud.platform.yaml) — machine-readable Development, compatibility, Platform-System, and conformance state.
 - [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) — native replacement and transitional-source boundary.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — existing architecture/security context; portions describing the inherited application must be read as transitional until updated by native milestones.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture/security context; inherited-application sections remain transitional/historical unless superseded by native milestones.
 - [docs/PLATFORM_CONFORMANCE.md](docs/PLATFORM_CONFORMANCE.md) — platform conformance requirements.
-- [docs/GLAZE-UI.md](docs/GLAZE-UI.md) — Gallery-specific Glaze UI acceptance history and requirements.
+- [docs/GLAZE-UI.md](docs/GLAZE-UI.md) — Gallery-specific Glaze UI history and acceptance requirements; older version-target statements in that historical document do not override the current live Glaze lifecycle or `goreecloud.platform.yaml`.
 - [SECURITY.md](SECURITY.md) — vulnerability and security boundary guidance.
 - [NOTICE.md](NOTICE.md) — inherited-work licensing and provenance notices.
 
