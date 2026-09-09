@@ -30,15 +30,19 @@ object GalleryPhotoEditStatePolicy {
     fun restore(snapshot: GalleryPhotoEditStateSnapshot?): GalleryPhotoEditPlan? {
         snapshot ?: return null
         return runCatching {
+            val crop = GalleryNormalizedCrop(
+                left = snapshot.cropLeft,
+                top = snapshot.cropTop,
+                right = snapshot.cropRight,
+                bottom = snapshot.cropBottom,
+            )
+            require(crop.width >= GalleryPhotoEditPolicy.MIN_NORMALIZED_CROP_SIZE)
+            require(crop.height >= GalleryPhotoEditPolicy.MIN_NORMALIZED_CROP_SIZE)
+
             GalleryPhotoEditPlan(
                 rotationQuarterTurns = snapshot.rotationQuarterTurns,
                 flipHorizontal = snapshot.flipHorizontal,
-                crop = GalleryNormalizedCrop(
-                    left = snapshot.cropLeft,
-                    top = snapshot.cropTop,
-                    right = snapshot.cropRight,
-                    bottom = snapshot.cropBottom,
-                ),
+                crop = crop,
             )
         }.getOrNull()
     }
