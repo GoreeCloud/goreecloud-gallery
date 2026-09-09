@@ -58,6 +58,34 @@ class GalleryPhotoEditStatePolicyTest {
     }
 
     @Test
+    fun `sub-minimum restored crop fails closed`() {
+        assertNull(
+            GalleryPhotoEditStatePolicy.restore(
+                GalleryPhotoEditStateSnapshot(
+                    rotationQuarterTurns = 0,
+                    flipHorizontal = false,
+                    cropLeft = 0f,
+                    cropTop = 0f,
+                    cropRight = GalleryPhotoEditPolicy.MIN_NORMALIZED_CROP_SIZE / 2f,
+                    cropBottom = 1f,
+                ),
+            ),
+        )
+        assertNull(
+            GalleryPhotoEditStatePolicy.restore(
+                GalleryPhotoEditStateSnapshot(
+                    rotationQuarterTurns = 0,
+                    flipHorizontal = false,
+                    cropLeft = 0f,
+                    cropTop = 0f,
+                    cropRight = 1f,
+                    cropBottom = GalleryPhotoEditPolicy.MIN_NORMALIZED_CROP_SIZE / 2f,
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `nonfinite crop fails closed`() {
         assertNull(
             GalleryPhotoEditStatePolicy.restore(
