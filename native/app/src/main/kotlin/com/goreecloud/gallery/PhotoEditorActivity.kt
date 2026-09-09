@@ -37,6 +37,7 @@ class PhotoEditorActivity : Activity() {
     private var sourceBitmap: Bitmap? = null
     private var previewBitmap: Bitmap? = null
     private var editPlan = GalleryPhotoEditPlan()
+    private var restoredEditPlan: GalleryPhotoEditPlan? = null
     private var renderGeneration = 0
     private var working = false
 
@@ -61,11 +62,38 @@ class PhotoEditorActivity : Activity() {
             return
         }
 
+        restoredEditPlan = savedInstanceState
+            ?.takeIf { it.getBoolean(STATE_EDIT_PLAN_PRESENT, false) }
+            ?.let {
+                GalleryPhotoEditStatePolicy.restore(
+                    GalleryPhotoEditStateSnapshot(
+                        rotationQuarterTurns = it.getInt(STATE_ROTATION_QUARTER_TURNS),
+                        flipHorizontal = it.getBoolean(STATE_FLIP_HORIZONTAL),
+                        cropLeft = it.getFloat(STATE_CROP_LEFT),
+                        cropTop = it.getFloat(STATE_CROP_TOP),
+                        cropRight = it.getFloat(STATE_CROP_RIGHT),
+                        cropBottom = it.getFloat(STATE_CROP_BOTTOM),
+                    ),
+                )
+            }
+
         sourceUri = uri
         sourceDisplayName = displayName
         sourceMimeType = mimeType
         buildSurface()
         loadSourcePhoto()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        val snapshot = GalleryPhotoEditStatePolicy.snapshot(restoredEditPlan ?: editPlan)
+        outState.putBoolean(STATE_EDIT_PLAN_PRESENT, true)
+        outState.putInt(STATE_ROTATION_QUARTER_TURNS, snapshot.rotationQuarterTurns)
+        outState.putBoolean(STATE_FLIP_HORIZONTAL, snapshot.flipHorizontal)
+        outState.putFloat(STATE_CROP_LEFT, snapshot.cropLeft)
+        outState.putFloat(STATE_CROP_TOP, snapshot.cropTop)
+        outState.putFloat(STATE_CROP_RIGHT, snapshot.cropRight)
+        outState.putFloat(STATE_CROP_BOTTOM, snapshot.cropBottom)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onDestroy() {
@@ -257,7 +285,8 @@ class PhotoEditorActivity : Activity() {
                         return@runOnUiThread
                     }
                     sourceBitmap = decoded
-                    editPlan = GalleryPhotoEditPolicy.reset()
+                    editPlan = restoredEditPlan ?: GalleryPhotoEditPolicy.reset()
+                    restoredEditPlan = null
                     renderPlanPreview()
                 }
             } catch (_: GalleryPhotoTooLargeException) {
@@ -438,5 +467,12 @@ class PhotoEditorActivity : Activity() {
 
     private companion object {
         const val TARGET_DP = 48
+        const val STATE_EDIT_PLAN_PRESENT = "editor.edit-plan-present"
+        const val STATE_ROTATION_QUARTER_TURNS = "editor.rotation-quarter-turns"
+        const val STATE_FLIP_HORIZONTAL = "editor.flip-horizontal"
+        const val STATE_CROP_LEFT = "editor.crop-left"
+        const val STATE_CROP_TOP = "editor.crop-top"
+        const val STATE_CROP_RIGHT = "editor.crop-right"
+        const val STATE_CROP_BOTTOM = "editor.crop-bottom"
     }
 }
