@@ -472,7 +472,12 @@ class PhotoEditorActivity : Activity() {
         gravity = Gravity.CENTER
         minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
         minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
-        setPadding(dp(GalleryGlazeContract.SHAPE_QUIET_DP), 0, dp(GalleryGlazeContract.SHAPE_QUIET_DP), 0)
+        setPadding(
+            dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP),
+            0,
+            dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP),
+            0,
+        )
         setTextColor(Color.WHITE)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         setTypeface(typeface, Typeface.BOLD)
