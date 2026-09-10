@@ -12,9 +12,9 @@ class PhotoEditorGlazeSourceContractTest {
             Path.of("src/main/kotlin/com/goreecloud/gallery/PhotoEditorActivity.kt"),
             Path.of("native/app/src/main/kotlin/com/goreecloud/gallery/PhotoEditorActivity.kt"),
         )
-        val source = candidates.firstOrNull(Files::exists)
+        val source = candidates.firstOrNull { Files.exists(it) }
             ?: error("PhotoEditorActivity.kt source was not found from the native app or repository root")
-        return Files.readString(source)
+        return source.toFile().readText()
     }
 
     @Test
