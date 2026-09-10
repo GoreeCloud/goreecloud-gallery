@@ -145,18 +145,31 @@ class PhotoEditorActivity : Activity() {
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            background = roundedSurface(0xe61a1a1d.toInt(), 22)
+            setPadding(
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+            )
+            background = roundedSurface(0xe61a1a1d.toInt(), GalleryGlazeContract.SHAPE_ROUNDED_DP)
         }
         val cancel = editorButton("Cancel", "Cancel editing and keep the original photo") {
             if (!working) finish()
         }
-        topBar.addView(cancel, LinearLayout.LayoutParams(dp(76), dp(TARGET_DP)))
+        topBar.addView(
+            cancel,
+            LinearLayout.LayoutParams(dp(76), dp(GalleryGlazeContract.GENERAL_TARGET_DP)),
+        )
 
         val titles = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), 0, dp(8), 0)
+            setPadding(
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                0,
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                0,
+            )
             addView(TextView(context).apply {
                 text = "Edit photo"
                 setTextColor(Color.WHITE)
@@ -177,14 +190,17 @@ class PhotoEditorActivity : Activity() {
         saveButton = editorButton("Save copy", "Save the edited photo as a new copy and keep the original") {
             saveEditedCopy()
         }
-        topBar.addView(saveButton, LinearLayout.LayoutParams(dp(92), dp(TARGET_DP)))
+        topBar.addView(
+            saveButton,
+            LinearLayout.LayoutParams(dp(92), dp(GalleryGlazeContract.GENERAL_TARGET_DP)),
+        )
         root.addView(
             topBar,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)).apply {
                 gravity = Gravity.TOP
-                marginStart = dp(10)
-                marginEnd = dp(10)
-                topMargin = dp(6)
+                marginStart = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+                marginEnd = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+                topMargin = dp(GalleryGlazeContract.SPACE_CONTROL_DP)
             },
         )
 
@@ -193,7 +209,12 @@ class PhotoEditorActivity : Activity() {
             setTextColor(0xffd7d9de.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(4), dp(12), dp(4))
+            setPadding(
+                dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP),
+                dp(GalleryGlazeContract.SPACE_HAIRLINE_DP),
+                dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP),
+                dp(GalleryGlazeContract.SPACE_HAIRLINE_DP),
+            )
             maxLines = 2
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         }
@@ -202,15 +223,20 @@ class PhotoEditorActivity : Activity() {
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)).apply {
                 gravity = Gravity.BOTTOM
                 bottomMargin = dp(104)
-                marginStart = dp(10)
-                marginEnd = dp(10)
+                marginStart = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+                marginEnd = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
             },
         )
 
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setPadding(
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+                dp(GalleryGlazeContract.SPACE_CONTROL_DP),
+            )
         }
         addControl(controls, "↺ 90°", "Rotate photo 90 degrees left") {
             applyTransform(GalleryPhotoEditPolicy.rotateLeft(editPlan))
@@ -234,7 +260,7 @@ class PhotoEditorActivity : Activity() {
         val scroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             isFillViewport = false
-            background = roundedSurface(0xe61a1a1d.toInt(), 24)
+            background = roundedSurface(0xe61a1a1d.toInt(), GalleryGlazeContract.SHAPE_ROUNDED_DP)
             addView(
                 controls,
                 ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT),
@@ -244,9 +270,9 @@ class PhotoEditorActivity : Activity() {
             scroll,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(88)).apply {
                 gravity = Gravity.BOTTOM
-                marginStart = dp(10)
-                marginEnd = dp(10)
-                bottomMargin = dp(12)
+                marginStart = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+                marginEnd = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+                bottomMargin = dp(GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
             },
         )
 
@@ -268,7 +294,7 @@ class PhotoEditorActivity : Activity() {
         row.addView(
             control,
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(60)).apply {
-                marginEnd = dp(4)
+                marginEnd = dp(GalleryGlazeContract.SPACE_HAIRLINE_DP)
             },
         )
     }
@@ -444,13 +470,13 @@ class PhotoEditorActivity : Activity() {
     ): TextView = TextView(this).apply {
         text = label
         gravity = Gravity.CENTER
-        minHeight = dp(TARGET_DP)
-        minWidth = dp(TARGET_DP)
-        setPadding(dp(10), 0, dp(10), 0)
+        minHeight = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        minWidth = dp(GalleryGlazeContract.GENERAL_TARGET_DP)
+        setPadding(dp(GalleryGlazeContract.SHAPE_QUIET_DP), 0, dp(GalleryGlazeContract.SHAPE_QUIET_DP), 0)
         setTextColor(Color.WHITE)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         setTypeface(typeface, Typeface.BOLD)
-        background = roundedSurface(0x2effffff, 16)
+        background = roundedSurface(0x2effffff, GalleryGlazeContract.SHAPE_CONTROL_DP)
         isClickable = true
         isFocusable = true
         contentDescription = description
@@ -466,7 +492,6 @@ class PhotoEditorActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private companion object {
-        const val TARGET_DP = 48
         const val STATE_EDIT_PLAN_PRESENT = "editor.edit-plan-present"
         const val STATE_ROTATION_QUARTER_TURNS = "editor.rotation-quarter-turns"
         const val STATE_FLIP_HORIZONTAL = "editor.flip-horizontal"
