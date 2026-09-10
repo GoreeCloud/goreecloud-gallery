@@ -67,10 +67,10 @@ object GalleryGlazeContract {
      * composition heuristics, not canonical Glaze device identities or universal breakpoints.
      */
     fun horizontalGutterDp(widthDp: Int): Int = when {
-        widthDp >= 1200 -> 48
-        widthDp >= 840 -> 32
-        widthDp >= 600 -> 24
-        else -> 16
+        widthDp >= 1200 -> SPACE_REGION_DP
+        widthDp >= 840 -> SPACE_SECTION_DP
+        widthDp >= 600 -> SPACE_CONTENT_DP
+        else -> SPACE_STANDARD_CLUSTER_DP
     }
 
     /** Product-specific media density, not the Glaze foundational layout-grid column token. */
