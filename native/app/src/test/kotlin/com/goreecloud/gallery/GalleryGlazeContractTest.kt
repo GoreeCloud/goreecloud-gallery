@@ -6,22 +6,59 @@ import kotlin.test.assertTrue
 
 class GalleryGlazeContractTest {
     @Test
-    fun `native shell targets current Gallery Glaze contract and accessible target floor`() {
-        assertEquals("1.0.0", GalleryGlazeContract.VERSION)
+    fun `native shell maps current Gallery Glaze source contract at exact authority revision`() {
+        assertEquals("1.3.0", GalleryGlazeContract.VERSION)
+        assertEquals(
+            "8354308445da9ac35ced2b37a7f503a08a0aaf72",
+            GalleryGlazeContract.AUTHORITY_REVISION,
+        )
         assertTrue(GalleryGlazeContract.GENERAL_TARGET_DP >= 48)
         assertTrue(GalleryGlazeContract.NAVIGATION_HEIGHT_DP >= GalleryGlazeContract.GENERAL_TARGET_DP)
     }
 
     @Test
-    fun `adaptive gutters expand without shrinking phone composition`() {
-        assertEquals(16, GalleryGlazeContract.horizontalGutterDp(390))
-        assertEquals(24, GalleryGlazeContract.horizontalGutterDp(820))
-        assertEquals(32, GalleryGlazeContract.horizontalGutterDp(900))
-        assertEquals(40, GalleryGlazeContract.horizontalGutterDp(1280))
+    fun `semantic spacing values follow governed Glaze spatial baseline`() {
+        assertEquals(2, GalleryGlazeContract.SPACE_MICRO_DP)
+        assertEquals(4, GalleryGlazeContract.SPACE_HAIRLINE_DP)
+        assertEquals(8, GalleryGlazeContract.SPACE_CONTROL_DP)
+        assertEquals(12, GalleryGlazeContract.SPACE_COMPACT_CLUSTER_DP)
+        assertEquals(16, GalleryGlazeContract.SPACE_STANDARD_CLUSTER_DP)
+        assertEquals(24, GalleryGlazeContract.SPACE_CONTENT_DP)
+        assertEquals(32, GalleryGlazeContract.SPACE_SECTION_DP)
+        assertEquals(48, GalleryGlazeContract.SPACE_REGION_DP)
     }
 
     @Test
-    fun `photo grid is media dense on phones and adapts across wider classes`() {
+    fun `semantic shape values follow governed Glaze role mapping`() {
+        assertEquals(10, GalleryGlazeContract.SHAPE_QUIET_DP)
+        assertEquals(12, GalleryGlazeContract.SHAPE_CONTROL_DP)
+        assertEquals(20, GalleryGlazeContract.SHAPE_CONTAINER_DP)
+        assertEquals(24, GalleryGlazeContract.SHAPE_ROUNDED_DP)
+        assertEquals(28, GalleryGlazeContract.SHAPE_OVERLAY_DP)
+        assertEquals(999, GalleryGlazeContract.SHAPE_CAPSULE_DP)
+        assertEquals(GalleryGlazeContract.SHAPE_CAPSULE_DP, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
+    }
+
+    @Test
+    fun `semantic motion values follow governed Glaze motion baseline`() {
+        assertEquals(160L, GalleryGlazeContract.MOTION_MICRO_MS)
+        assertEquals(240L, GalleryGlazeContract.MOTION_STANDARD_MS)
+        assertEquals(360L, GalleryGlazeContract.MOTION_CONNECTED_MS)
+        assertEquals(480L, GalleryGlazeContract.MOTION_SPATIAL_MS)
+        assertEquals(180L, GalleryGlazeContract.MOTION_REDUCED_STANDARD_MS)
+        assertEquals(0L, GalleryGlazeContract.MOTION_MINIMAL_MS)
+    }
+
+    @Test
+    fun `adaptive gutters use governed spatial values without treating widths as Glaze device identities`() {
+        assertEquals(16, GalleryGlazeContract.horizontalGutterDp(390))
+        assertEquals(24, GalleryGlazeContract.horizontalGutterDp(820))
+        assertEquals(32, GalleryGlazeContract.horizontalGutterDp(900))
+        assertEquals(48, GalleryGlazeContract.horizontalGutterDp(1280))
+    }
+
+    @Test
+    fun `photo grid remains product specific and media dense`() {
         assertEquals(3, GalleryGlazeContract.gridColumns(320))
         assertEquals(4, GalleryGlazeContract.gridColumns(360))
         assertEquals(4, GalleryGlazeContract.gridColumns(390))
@@ -41,12 +78,13 @@ class GalleryGlazeContractTest {
     }
 
     @Test
-    fun `navigation capsule reserves a dedicated phone action zone`() {
+    fun `navigation composition consumes semantic spacing and capsule roles`() {
         assertEquals(54, GalleryGlazeContract.NAVIGATION_HEIGHT_DP)
-        assertEquals(26, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
+        assertEquals(999, GalleryGlazeContract.NAVIGATION_RADIUS_DP)
         assertEquals(24, GalleryGlazeContract.NAVIGATION_SIDE_MARGIN_DP)
-        assertEquals(10, GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
+        assertEquals(12, GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP)
         assertEquals(4, GalleryGlazeContract.NAVIGATION_ELEVATION_DP)
+        assertEquals(32, GalleryGlazeContract.CONTENT_BOTTOM_INSET_DP)
         assertTrue(
             GalleryGlazeContract.NAVIGATION_RESERVED_SPACE_DP >=
                 GalleryGlazeContract.NAVIGATION_HEIGHT_DP + GalleryGlazeContract.NAVIGATION_BOTTOM_MARGIN_DP,

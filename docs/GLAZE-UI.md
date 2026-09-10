@@ -1,213 +1,149 @@
-# GoreeCloud Gallery Glaze UI Contract
+# GoreeCloud Gallery — GLAZE UI V1.3 Application Contract
 
-## Purpose
+## Status
 
-This document defines the repository-local Glaze UI implementation and release-review contract for GoreeCloud Gallery. It supplements the authoritative GoreeCloud Glaze UI Design Language and Application Branding and User Interface Design standards; it does not replace them.
+**Lifecycle:** Development  
+**Required design system:** GLAZE UI V1.3 / 1.3.0 — Adaptive Resonance  
+**Repository-local source mapping:** 1.3.0 on the current Development candidate  
+**Application conformance:** Not established  
+**Production eligibility:** Not established
 
-GoreeCloud Gallery is a GoreeCloud-maintained Android fork. Every Gallery-controlled user-facing surface must therefore use Glaze UI unless a material technical, platform, legal, licensing, accessibility, or interoperability constraint is explicitly documented as an approved exception.
+This document defines the Gallery-specific application mapping and acceptance boundary for the current GoreeCloud design system. It supplements the authoritative GLAZE UI repository and GoreeCloud application-design governance. It does not grant Gallery conformance, Release Candidate status, production acceptance, or Stable status.
 
-## Conformance target
+## Authoritative source anchor
 
-- Target design system: **Glaze UI 1.0.0**
-- Canonical repository: `GoreeCloud/glaze-ui`
-- Reviewed canonical reference revision: `d6e446fd8ef251259d16368d50aad90d9287a774`
-- Native implementation model: Android platform-native semantic mapping rather than copied web CSS
-- Current Gallery implementation line: `gc.16`
-- Permanent Glaze UI exceptions: **none approved**
+The current Gallery source mapping is pinned to the authoritative `GoreeCloud/goreecloud-glaze-ui` revision:
 
-## Product identity
+`8354308445da9ac35ced2b37a7f503a08a0aaf72`
 
-The user-facing product identity is **GoreeCloud Gallery**. Upstream Fossify origin, copyright, licensing, and attribution remain preserved in source and legal records, but the ordinary application experience must not present Fossify as the primary product identity.
+That revision identifies **GLAZE UI V1.3 / 1.3.0 — Adaptive Resonance** as the required current consumer baseline. Gallery must not silently follow a moving branch when recording application acceptance; acceptance evidence must remain bound to an exact Gallery revision and an exact Glaze authority revision.
 
-The application ID is `com.goreecloud.gallery`. GoreeCloud-owned branding, package metadata, launcher presentation, color identity, and visible product terminology must remain consistent with that identity.
+The V1.3 repository retains some implementation-provenance artifacts under `.candidate` filenames. Those filenames do not downgrade the promoted V1.3 consumer baseline. Gallery uses them only as the governed implementation source behind the current semantic roles.
 
-## Native semantic mapping
+## Source-token mapping
 
-Gallery maps the Glaze UI 1.0 contract into Android resources and platform conventions. The mapping is semantic: it preserves the same roles, hierarchy, interaction intent, and accessibility boundaries without requiring Android to reproduce browser-only CSS effects.
+`native/app/src/main/kotlin/com/goreecloud/gallery/GalleryGlazeContract.kt` is Gallery's compact repository-local Android mapping of the shared semantic contract.
 
-The `gc.11` foundation establishes native resources for Canvas and Canvas Accent colors, Surface and muted-surface roles, primary and secondary accents, semantic text/status roles, spacing, rounded geometry, 44dp minimum and 48dp comfortable actionable targets, 90/160/220/320ms motion semantics, light/dark palettes, and Compact-first Settings composition.
+The current mapping consumes these authoritative roles and inherited numeric baselines:
 
-The `gc.12` browsing layer extends those same semantics into the folders screen and opened-folder media screen with adaptive media-aware gutters, Canvas depth, branded menu chrome, Raised empty-state actions, comfortable action targets, and accent loading feedback.
+- **Spacing:** 2, 4, 8, 12, 16, 24, 32, and 48 dp from the shared spatial scale.
+- **Shape:** quiet 10 dp, control 12 dp, container/soft 20 dp, rounded 24 dp, overlay 28 dp, and capsule/full-pill geometry.
+- **Motion:** micro 160 ms, standard 240 ms, connected 360 ms, spatial 480 ms, reduced-standard 180 ms, and minimal 0 ms.
+- **Interaction target:** 48 dp minimum for ordinary Android application controls represented by this contract.
+- **Adaptive gutters:** 16, 24, 32, and 48 dp values from the governed spatial baseline.
 
-The `gc.13` search layer extends the same browsing composition into global Gallery search, including the shared Canvas, GoreeCloud accent-gradient search/menu chrome, adaptive browsing gutters, and a rounded muted Raised empty-state surface.
+Gallery's media-grid and album-grid item counts remain product-specific presentation decisions. They are not the same thing as the Glaze foundational layout-grid column tokens.
 
-The `gc.14` media-viewer layer applies a restrained muted Glaze overlay to full-screen viewer chrome and standardizes visible viewer actions on 48dp comfortable targets while deliberately leaving the photo or video itself visually dominant.
+The Android width thresholds used to select Gallery's current gutter and media-density composition are also application/platform adapter heuristics. They must not be represented as universal Glaze breakpoints or device identities.
 
-The `gc.15` transient-surface refinement applies the same semantic system to sorting, grouping, filtering, destructive confirmations, overflow menus, and Settings density after representative-device visual review. It replaces generic transient white surfaces with coordinated Glaze light/dark presentation, removes redundant Settings dividers, tightens excessive card spacing, and strengthens the Settings app-bar treatment without changing application behavior.
+## Current source migration tranche
 
-The `gc.16` dialog-geometry refinement responds to representative-device review of gc.15 by making sorting, grouping, and media-filter dialog ScrollViews measure to their actual content instead of taking the full available dialog height. This keeps the rounded Glaze surface attached to its controls, removes excessive empty space, and preserves scrollability when content genuinely exceeds the available viewport.
+The current V1.3 source-mapping tranche deliberately changes real native presentation inputs rather than merely relabeling the design-system version:
 
-These resources are intentionally local. Gallery does not load Glaze UI from a remote runtime, remote font service, icon CDN, analytics dependency, or network-delivered style package.
+- the native contract is re-pinned from the obsolete `1.0.0` source declaration to `1.3.0` with an exact Glaze authority revision;
+- the widest Gallery gutter moves to the governed 48 dp spatial value;
+- the bottom navigation surface consumes the V1.3 capsule shape role rather than a hand-selected near-pill radius;
+- the bottom navigation margin consumes the 12 dp compact-cluster spacing role;
+- the reserved navigation zone is adjusted to preserve separation after the margin change;
+- the content bottom inset consumes the 32 dp section-spacing role;
+- shared semantic spacing, shape, motion, and target-size roles are represented by named source constants and protected by unit tests.
 
-## Surface hierarchy
+These changes improve the source contract and reduce arbitrary geometry, but they are **not a complete whole-application migration**. Gallery still contains Gallery-controlled presentation values and Android resource styling outside this compact contract that require deliberate review against the V1.3 semantic system.
 
-Gallery uses the Glaze UI hierarchy according to the needs of a media application:
+## Media-first hierarchy
 
-- **Canvas** — atmospheric page background behind Gallery-controlled structural surfaces.
-- **Solid** — readability-first content surfaces and platform-native fallback behavior.
-- **Raised** — settings rows, empty-state actions and messages, cards, and important grouped controls with restrained separation.
-- **Glaze** — navigation/app-bar emphasis and selected layered presentation where Android can provide the treatment without harming readability or performance.
-- **Overlay** — dialogs, sheets, menus, viewer controls, and other attention-priority surfaces using platform-native Android presentation.
+Gallery is a media application. Glaze treatment must improve structure and usability without competing with the user's photos or videos.
 
-Glass is not required everywhere. Media remains visually dominant, and solid/native fallbacks are preferred whenever transparency or blur would reduce clarity, accessibility, performance, or platform consistency.
+Gallery should therefore prefer:
 
-## Glaze UI design principles for Gallery
+- media-dominant browsing surfaces;
+- solid or readability-first content planes around primary media;
+- restrained container and overlay treatment for controls, dialogs, contextual actions, settings, and Recycle Bin workflows;
+- semantic rounded geometry rather than unrelated hand-selected radii;
+- clear state and focus treatment that does not rely on shape, color, translucency, or motion as the sole signal;
+- connected motion only where it preserves a meaningful relationship, such as thumbnail-to-detail transitions;
+- no continuous decorative wobble, pulse, bounce, or restless animation.
 
-Gallery applies Glaze UI to a local-media Android experience using the following product-specific interpretation:
+Full-screen viewer chrome and editor controls should remain visually subordinate to media. Destructive actions must remain explicit and distinguishable without using aesthetic treatment to imply that Android or a GoreeCloud platform authority has approved an operation.
 
-- clear Material-derived structure and predictable Android interaction patterns;
-- softened, rounded geometry for media thumbnails, controls, dialogs, menus, and structural surfaces where technically appropriate;
-- layered surfaces and restrained depth that improve hierarchy without obscuring media content;
-- selective translucency or visual depth only where readability, performance, and accessibility remain strong;
-- purposeful GoreeCloud gradients for identity and hierarchy rather than decoration alone;
-- high-quality light and dark presentation with coherent foreground/background contrast;
-- ergonomic controls and practical mobile touch targets;
-- restrained motion that communicates state or relationship and respects reduced-motion behavior where applicable;
-- privacy-conscious, offline-first presentation with no analytics, advertising, tracking, cloud account, or remote-content dependency.
+## Accessibility and resilience
 
-## Settings integration
+V1.3 source mapping does not replace Gallery-specific accessibility acceptance.
 
-Settings is a primary GoreeCloud-owned surface and receives an explicit Glaze UI treatment beginning in `gc.11`:
+Before Gallery can claim current design-system conformance, applicable testing must cover at least:
 
-- the page uses a Glaze Canvas gradient rather than an undifferentiated flat background;
-- the top app bar uses the GoreeCloud primary-to-secondary accent gradient;
-- setting rows use rounded Raised surfaces with a restrained line and Android ripple feedback;
-- interactive rows enforce a 48dp comfortable minimum height;
-- content uses a 16dp Compact-first horizontal inset, 32dp at `sw600dp`, and 64dp at `sw840dp`;
-- light and dark Glaze semantic palettes are defined separately;
-- the existing **Privacy & permissions** entry remains platform-native and delegates permission administration to Android;
-- beginning in `gc.15`, redundant Settings dividers are hidden where Raised surfaces already establish grouping, row spacing is tightened, and the app-bar treatment is explicitly reinforced across both the app-bar container and toolbar.
+- TalkBack labels, role/state announcements, and logical traversal;
+- keyboard and switch-access operation where applicable;
+- visible focus and non-color state differentiation;
+- 200% text scaling and increased Android display size;
+- ordinary 48 dp target floors and any applicable larger assisted-target behavior;
+- right-to-left layout and localization resilience;
+- increased contrast and reduced-transparency behavior;
+- reduced-motion and minimal-motion semantic equivalents;
+- narrow phone, representative phone, tablet/large-window, rotation, and other applicable Android form factors;
+- safe-area, system-bar, keyboard-occlusion, and platform-inset behavior;
+- representative-device frame pacing and interaction stability.
 
-The adaptive Android resource qualifiers are platform-native equivalents of Glaze UI's Compact/Medium/Expanded/Wide principle; they are not a claim that Android `sw600dp` and `sw840dp` exactly equal the web breakpoints.
+Accessibility reflow may take precedence over density or multi-region presentation. Gallery must not shrink interaction targets merely to preserve a desired number of grid columns or controls.
 
-## Browsing-surface integration
+## Appearance and material boundary
 
-The folder browser and opened-folder media grid are Gallery's highest-frequency surfaces and receive an explicit Glaze UI treatment in `gc.12`:
+Gallery must not equate conformance with a matching color palette. Application acceptance must evaluate typography, spacing, geometry, hierarchy, state, contrast, motion, input behavior, and transient surfaces as a coherent system.
 
-- both pages use the same semantic Glaze Canvas as Settings, establishing application-wide visual continuity;
-- the Gallery search/menu chrome uses the GoreeCloud accent gradient while preserving the existing Android search/menu implementation;
-- browsing content uses a deliberately subtle 8dp horizontal gutter on Compact layouts, 16dp at `sw600dp`, and 24dp at `sw840dp`;
-- grids retain media dominance and receive only restrained bottom breathing room rather than cardifying every thumbnail;
-- filter/search switching and empty-state recovery actions use 48dp comfortable targets and rounded Raised/ripple treatment;
-- the media loading indicator uses the semantic GoreeCloud accent;
-- no blur, remote asset, web runtime, or network dependency is required for these surfaces.
+The application remains offline-first. A Glaze enhancement must not add remote fonts, remote icons, analytics, advertising, tracking pixels, network-hosted style resources, or another network dependency. Gallery's current no-unnecessary-network boundary remains authoritative over decorative effects.
 
-Browsing insets are intentionally smaller than Settings insets. A media grid is primary content and should remain visually expansive; Glaze UI provides structure and identity without reducing useful media density.
+Advanced material effects are optional when they would reduce readability, accessibility, performance, or platform consistency. Solid semantic fallback is preferable to an effect that cannot be rendered safely or consistently.
 
-## Search integration
+## Gallery-specific product invariants
 
-Global Gallery search receives the same media-first Glaze composition in `gc.13`:
+The current migration must preserve established Gallery product behavior while modernizing the interface. In particular:
 
-- search uses the shared Glaze Canvas and GoreeCloud accent-gradient search/menu chrome;
-- results reuse the gc.12 adaptive browsing gutter contract so search density matches folder and media browsing;
-- the result grid receives restrained bottom breathing room without decorative thumbnail cards;
-- the no-results state uses a muted Raised surface with rounded geometry and a restrained semantic outline rather than floating unstructured text;
-- the search surface remains fully local and introduces no remote UI, font, analytics, advertising, tracking, or network dependency.
-
-This search treatment is intentionally evolutionary rather than a separate visual mode. Search should feel like part of Gallery, not like a detached utility screen.
-
-## Media-viewer integration
-
-The full-screen media viewer receives a restrained Overlay treatment in `gc.14`:
-
-- the viewer toolbar uses the semantic muted Glaze surface rather than a separate branded gradient so controls remain subordinate to the media;
-- the bottom action area uses a rounded-top muted Glaze overlay with a restrained semantic outline;
-- visible viewer actions use 48dp comfortable targets and retain their existing Android selection feedback and content descriptions;
-- photos and videos remain unframed primary content; the design system is applied to chrome rather than placed over the media as decorative cards;
-- delete and other destructive operations retain their existing behavior and confirmation requirements;
-- no blur, remote asset, analytics, tracking, advertising, or network dependency is added.
-
-The media viewer intentionally uses a quieter Glaze treatment than Settings or browsing navigation. GoreeCloud identity should be recognizable in the controls without competing with the user’s photo or video.
-
-## Transient surfaces and dialogs
-
-Representative-device review identified dialogs and popup menus as the strongest remaining visual mismatch after gc.14. The `gc.15` refinement therefore establishes the following transient-surface contract:
-
-- sorting, grouping, and media-filter dialogs use a local rounded Glaze Surface with a restrained semantic outline;
-- radio buttons and checkboxes use the GoreeCloud semantic accent and 48dp comfortable minimum targets;
-- unnecessary divider rules inside these dialogs are removed where spacing and grouping already communicate structure;
-- destructive confirmation dialogs retain confirmation behavior but use the semantic danger color for warning text and the same rounded Glaze surface language;
-- toolbar overflow menus use coordinated Glaze light/dark surfaces with rounded geometry and a subtle accent outline instead of visually generic white/dark rectangles;
-- dialog/window styling must not change sorting, grouping, filtering, destructive-operation, permission, or file-operation semantics.
-
-The `gc.16` refinement adds a geometry rule for the same transient surfaces: dialog content must use content-driven height by default and only scroll when the content exceeds the available viewport. A Glaze dialog must not reserve large empty regions merely because its root is scrollable.
-
-Transient surfaces are treated as Overlay-level hierarchy: visually distinct enough to command attention, but not more visually dominant than the media or the action being confirmed.
-
-## Accepted Gallery-specific visual invariants
-
-The following are release-significant GoreeCloud presentation decisions and must not silently regress:
-
-- file thumbnails use rounded corners;
-- folder thumbnails use the rounded GoreeCloud presentation;
-- square-thumbnail selection controls removed by GoreeCloud do not return;
-- thumbnail cropping remains disabled by the GoreeCloud policy;
-- toolbar overflow menus remain readable in both light and dark appearance modes;
-- dialogs preserve readable foreground/background contrast;
-- destructive actions remain visually distinguishable and retain the intended confirmation behavior;
-- the main folder view and opened media-folder view remain visibly consistent with the accepted GoreeCloud Gallery presentation;
-- primary user-facing Fossify branding does not reappear during upstream synchronization;
-- Settings retains the Glaze Canvas/Raised/Glaze hierarchy and practical target sizing introduced in gc.11;
-- folder and media browsing retain the gc.12 Canvas, adaptive gutter, Raised empty-action, and branded menu semantics without turning thumbnails into decorative cards;
-- search retains the gc.13 Canvas, branded search/menu chrome, adaptive browsing composition, and muted Raised empty-state treatment;
-- the media viewer retains the gc.14 muted Glaze toolbar/action overlay and comfortable action targets without obscuring primary media or changing destructive-action behavior;
-- transient surfaces retain the gc.15 rounded Glaze dialog/popup treatment, semantic control accents, compact Settings grouping, and unchanged behavioral semantics;
-- sorting, grouping, and media-filter dialogs retain gc.16 content-driven height and scroll only when required by available space.
-
-Where an invariant can be represented as pure behavior, GoreeCloud-owned automated tests should protect it. Where Android framework rendering, accessibility services, device profiles, permissions, or media operations are required, the corresponding real-device gate remains mandatory.
-
-## Theme and appearance contract
-
-Gallery must provide coherent light and dark presentation on supported Android configurations. Theme work must be reviewed across primary and secondary surfaces, including main folder and media-folder views, top app bars and overflow menus, search, Settings, dialogs and confirmation surfaces, empty/error states, media viewers/editing surfaces, share/open-with flows where Gallery controls presentation, recycle-bin/destructive flows, and permission-related application surfaces.
-
-A surface is not considered Glaze UI compliant merely because its background color matches the GoreeCloud palette. Typography, spacing, geometry, hierarchy, interaction states, contrast, and feedback must remain coherent as a system.
-
-## Accessibility and resilience contract
-
-Visual quality does not override accessibility. Stable-release review must include, where applicable, TalkBack identification, meaningful labels for icon-only controls, practical touch-target sizing, readable contrast, large-font and increased-display-size behavior, usable focus order, reduced-motion behavior, and safe solid-surface presentation when advanced effects are unavailable or inappropriate.
-
-The gc.11 Settings treatment, gc.12 browsing actions, gc.14 media-viewer controls, and gc.15 dialog controls use 48dp comfortable interactive targets. The gc.13 search empty state, gc.14 viewer overlay, and gc.15 dialogs use solid semantic surfaces rather than depending on translucency for readability. gc.16 keeps those dialog surfaces content-sized while preserving scrollability for large-font or constrained-height cases. Any Glaze UI treatment that materially weakens accessibility must be revised even if it matches the preferred aesthetic.
-
-## Privacy and dependency boundary
-
-Glaze UI assets and behavior must remain local to the application or its approved open-source build dependencies. Gallery must not introduce remote fonts, remote icon libraries, analytics resources, tracking pixels, advertising resources, or other network-hosted presentation dependencies.
-
-The packaged application is expected to remain without `android.permission.INTERNET`. A visual enhancement must not weaken that offline/privacy boundary.
-
-## Maintained-fork and upstream-sync review
-
-Every upstream synchronization must include a user-interface regression review for newly introduced or restored upstream names/logos, launcher/application icons, colors/themes/styles/assets, settings/onboarding terminology, menus/dialogs/empty states/errors, promotional links, accessibility regressions, and presentation controls intentionally removed by GoreeCloud.
-
-Required legal attribution must remain preserved. Rebranding does not remove license obligations.
-
-## Automated conformance boundary
-
-Repository validation must require this contract to remain present. Source validation must fail closed when accepted GoreeCloud presentation invariants or GoreeCloud-owned behavioral-test sources disappear.
-
-The gc.11 source validation requires the Glaze semantic resource files, light/dark mappings, 44/48dp target contract, four motion timing resources, adaptive Settings insets, Canvas/toolbar/row drawables, application of those resources in Settings, and a local-only dependency boundary.
-
-The gc.12 validation additionally requires adaptive browsing insets, the local Raised empty-action drawable, Canvas and menu treatment on both primary browsing screens, comfortable empty-state action targets, and semantic loading-accent application.
-
-The gc.13 validation additionally requires the search screen to use the shared Canvas, branded toolbar, adaptive browsing insets, local rounded muted empty-state drawable, and current test-build version identity.
-
-The gc.14 validation additionally requires the full-screen media viewer to use the muted Glaze toolbar surface, local rounded viewer-action overlay, at least eight comfortable viewer action targets, current version identity, and the local-only resource boundary.
-
-The gc.15 validation additionally requires rounded Glaze surfaces on sorting/grouping/filter dialogs, semantic accent and comfortable targets on their controls, semantic danger presentation for destructive warnings, reduced redundant Settings dividers, reinforced Settings header treatment, coordinated light/dark popup surfaces, current version identity, and preservation of the local-only resource boundary.
-
-The gc.16 validation additionally requires sorting, grouping, and media-filter dialog roots to use `wrap_content` height, disable forced viewport filling, retain overflow scrolling when needed, preserve the gc.15 Glaze surface, and carry the current test-build version identity.
-
-The ordinary acceptance workflow must verify that meaningful GoreeCloud-owned JVM tests actually execute. A successful Gradle task with `NO-SOURCE`, missing XML results, zero executed tests, or failing/error tests is not acceptable behavioral-test evidence.
-
-Automated conformance complements rather than replaces real-device Glaze UI acceptance. Android rendering, TalkBack behavior, user/profile isolation, permission handling, destructive media operations, upgrade/recovery, and final signed-build presentation remain manual or device-dependent release gates.
-
-## Exception model
-
-No permanent Glaze UI exception is approved for GoreeCloud Gallery at this time.
-
-If a future material constraint prevents compliance, the exception record must identify the affected surface or behavior, the requirement that cannot be met, the reason, user-visible impact, compensating or approved alternative, owner, review condition, and condition for removal. Convenience, schedule pressure, upstream defaults, or unfinished redesign work are not production exceptions.
-
-## Stable-release boundary
-
-Glaze UI compliance is a blocking Stable-release requirement. Stable promotion requires both automated conformance evidence and the applicable real-device visual/accessibility acceptance in `docs/STABLE-RELEASE-CHECKLIST.md`.
-
-A green build, successful APK assembly, or successful signing workflow alone does not establish Glaze UI production readiness.
+- Photos, Albums, Videos, Settings, Favorites, Recovery/Recycle Bin, viewer, selection, and editor capabilities must remain discoverable according to their implemented Development scope.
+- Media grids must remain media-dominant rather than turning every thumbnail into a decorative card.
+- Album surfaces must preserve meaningful covers, names, counts, and Android-authorized scope.
+- Viewer navigation must stay within the current authorized/presented collection.
+- Accessible Previous/Next alternatives must remain available alongside swipe navigation.
+- Photo editing must retain the current non-destructive Save copy authority boundary unless a separately approved contract changes it.
+- Trash, Restore, and permanent deletion must remain distinct and continue to rely on the applicable Android-owned authorization path.
+- Unknown or unavailable Privacy Shield, Wardveil Security, Everkeep, Identity, Mesh, or Manager evidence must never be converted into a positive visual status.
+
+## Historical design-system evidence
+
+The repository contains historical Gallery Glaze work from earlier design-system generations, including prior 1.0 and 2.x-era mappings and transitional Fossify-era presentation evidence. Those records remain useful for regression analysis, provenance, restoration, and comparison, but they do not override the current required V1.3 / 1.3.0 consumer baseline.
+
+Older screenshots and accepted Gallery presentation invariants remain valuable visual-comparison evidence. They do not make historical Glaze version labels current, and they do not authorize copying third-party proprietary assets or implementation details.
+
+## Automated source evidence
+
+The repository-local V1.3 source mapping must be protected by tests that verify at least:
+
+- exact `1.3.0` source version;
+- exact Glaze authority revision;
+- governed semantic spacing values;
+- governed semantic shape-role mapping;
+- governed semantic motion values;
+- 48 dp ordinary interaction floor;
+- adaptive gutter outputs;
+- product-specific media/album density remains explicit rather than being confused with the shared layout grid;
+- navigation reserved space remains sufficient for the bottom control surface.
+
+A passing source/build workflow proves only the checks executed on that exact Gallery revision. It does not establish visual quality, accessibility, device behavior, platform-system integration, recovery, signing, production readiness, or Stable qualification.
+
+## Remaining V1.3 acceptance gates
+
+Gallery remains `applicable-migration-required` and globally nonconformant until the applicable current-source work and acceptance evidence are complete. Remaining gates include:
+
+- reconciliation of residual Gallery-controlled hard-coded presentation values and Android resources with V1.3 semantic roles;
+- whole-application rendered review across browsing, albums, search, Favorites, viewer, editor, Settings, dialogs, selection, and Recycle Bin;
+- interaction-state and connected-motion review;
+- accessibility and large-text acceptance;
+- adaptive/form-factor and rotation acceptance;
+- representative physical-device/OEM/profile testing;
+- Human Visual Excellence review;
+- performance/frame-pacing review where affected;
+- rollback evidence bound to exact source revisions;
+- platform-system acceptance where applicable;
+- protected signing/provenance and release evidence;
+- explicit production approval and Stable qualification.
+
+No source version string, manifest label, unit test, screenshot, or CI run may independently waive these gates.

@@ -36,21 +36,23 @@ The repository contains GoreeCloud-owned native foundations under `native/`.
 
 `native/app` is the first-party Android application target using package ID `com.goreecloud.gallery`. The active Development line requires Android media authorization before provider reads, consumes the MediaStore adapter directly, provides bounded local photo/video browsing, Albums and Recycle Bin flows, Favorites and settings behavior, bounded full-screen navigation, Android-authorized Trash/Restore/Purge actions, and a first-party photo-editor candidate with crop, 90-degree rotation, horizontal flip, Reset, and non-destructive Save copy semantics.
 
-The current native source still maps the repository-local `GalleryGlazeContract.VERSION = "1.0.0"`. That is **implemented source state**, not the current platform requirement. The live GoreeCloud consumer requirement is **GLAZE UI V1.3 / 1.3.0 — Adaptive Resonance**. Gallery is therefore `applicable-migration-required`; it must not be represented as current Glaze-conformant merely by changing labels or version strings. A reviewed native migration and fresh rendered, accessibility, adaptive, representative-device, Human Visual Excellence, rollback, release, and production acceptance remain required.
+The current Development source maps the repository-local native `GalleryGlazeContract` to **GLAZE UI V1.3 / 1.3.0 — Adaptive Resonance** at exact authoritative Glaze revision `8354308445da9ac35ced2b37a7f503a08a0aaf72`. That mapping now uses governed semantic spacing, shape, motion, ordinary target-size, and adaptive-gutter values and changes real navigation/gutter/inset source inputs rather than only relabeling a version string.
 
-The current photo-editor candidate is Development evidence only. Representative physical-device/OEM/profile crop/rotate/flip/save-copy flows, source/output orientation fidelity, image-quality and metadata/color behavior, invalid/oversized/provider-failure/cancellation handling, process recreation, accessibility, current-Stable Glaze migration, Platform-System acceptance, signing, Release Candidate qualification, release approval, and Stable qualification remain open.
+This is still **source-migration evidence, not application conformance**. Gallery remains `applicable-migration-required` and globally nonconformant while residual Gallery-controlled presentation values and Android resources await reconciliation and fresh whole-application rendered, interaction, accessibility, adaptive/form-factor, representative-device, performance, Human Visual Excellence, rollback, platform-system, release, and production acceptance. See [docs/GLAZE-UI.md](docs/GLAZE-UI.md).
+
+The current photo-editor candidate is Development evidence only. Representative physical-device/OEM/profile crop/rotate/flip/save-copy flows, source/output orientation fidelity, image-quality and metadata/color behavior, invalid/oversized/provider-failure/cancellation handling, process recreation, accessibility, current-Stable Glaze application acceptance, Platform-System acceptance, signing, Release Candidate qualification, release approval, and Stable qualification remain open.
 
 ## Platform Contract
 
 `goreecloud.platform.yaml` is the machine-readable declaration of Gallery's current GoreeCloud Platform Contract state. It deliberately separates:
 
-- the native Glaze source actually present today (`1.0.0`);
-- the current required Glaze consumer target (`1.3.0`);
+- the repository-local Glaze V1.3 source mapping now present in Development;
+- the still-incomplete whole-application Glaze acceptance gates;
 - Development lifecycle state;
 - blocked/unaccepted Platform-System integrations; and
 - outstanding representative-device, accessibility, recovery, signing, release, and Stable gates.
 
-The Platform Contract workflow validates that declaration against the pinned central contract authority. A green manifest check is evidence of declaration validity, not evidence that the blocked integrations or release gates are accepted.
+The Platform Contract workflow validates that declaration against the pinned central contract authority. A green manifest check is evidence of declaration validity, not evidence that blocked integrations or release gates are accepted.
 
 ## Transitional reconstruction line
 
@@ -94,7 +96,7 @@ The old Fossify-based acceptance candidate is not a shortcut around those native
 - [docs/NATIVE-MIGRATION.md](docs/NATIVE-MIGRATION.md) — native replacement and transitional-source boundary.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — architecture/security context; inherited-application sections remain transitional/historical unless superseded by native milestones.
 - [docs/PLATFORM_CONFORMANCE.md](docs/PLATFORM_CONFORMANCE.md) — platform conformance requirements.
-- [docs/GLAZE-UI.md](docs/GLAZE-UI.md) — Gallery-specific Glaze UI history and acceptance requirements; older version-target statements in that historical document do not override the current live Glaze lifecycle or `goreecloud.platform.yaml`.
+- [docs/GLAZE-UI.md](docs/GLAZE-UI.md) — current Gallery-specific V1.3 source mapping and application-acceptance boundary.
 - [SECURITY.md](SECURITY.md) — vulnerability and security boundary guidance.
 - [NOTICE.md](NOTICE.md) — inherited-work licensing and provenance notices.
 
