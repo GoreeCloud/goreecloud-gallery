@@ -51,12 +51,12 @@ platform_systems:
     notes: Gallery has local settings and Favorites portability plus Android-authorized Trash and Restore behavior, but accepted Everkeep integration and complete Gallery-owned recovery acceptance are not established.
   glaze_ui:
     result: applicable-migration-required
-    version: "1.0.0"
+    version: "1.3.0"
     evidence:
       - native/app/src/main/kotlin/com/goreecloud/gallery/GalleryGlazeContract.kt
       - native/app/src/test/kotlin/com/goreecloud/gallery/GalleryGlazeContractTest.kt
       - docs/GLAZE-UI.md
-    notes: The active native source contract remains GLAZE UI 1.0.0. The current required GoreeCloud consumer target is GLAZE UI V1.3 / 1.3.0 Adaptive Resonance. Gallery must migrate deliberately and repeat application-specific rendered, accessibility, adaptive, representative-device, Human Visual Excellence, rollback, release, and production acceptance before conformance may be claimed.
+    notes: Gallery's Development source now maps its repository-local native contract to GLAZE UI V1.3 / 1.3.0 Adaptive Resonance at exact authoritative Glaze revision 8354308445da9ac35ced2b37a7f503a08a0aaf72. The mapping consumes governed semantic spacing, shape, motion, target-size, and adaptive-gutter values while retaining Gallery-specific media-density decisions. This source mapping does not establish application conformance. Gallery remains migration-required until residual Gallery-controlled presentation is reconciled and fresh whole-application rendered, interaction, accessibility, adaptive/form-factor, representative-device, performance, Human Visual Excellence, rollback, release, and production acceptance is completed.
   mesh:
     result: applicable-blocked
     version: null
@@ -127,12 +127,13 @@ conformance:
     - USER-MANUAL.md
     - native/app/src/main/AndroidManifest.xml
     - native/app/src/main/kotlin/com/goreecloud/gallery/GalleryGlazeContract.kt
+    - native/app/src/test/kotlin/com/goreecloud/gallery/GalleryGlazeContractTest.kt
     - native/app/src/main/kotlin/com/goreecloud/gallery/GalleryMediaAccessPolicy.kt
     - native/app/src/main/kotlin/com/goreecloud/gallery/GalleryPhotoEditPolicy.kt
     - native/app/src/main/kotlin/com/goreecloud/gallery/GalleryEditedMediaStore.kt
     - docs/GLAZE-UI.md
   blockers:
-    - Active native source remains on the GLAZE UI 1.0.0 source contract and requires deliberate migration to current Stable 1.3.0 plus fresh application acceptance.
+    - GLAZE UI V1.3 / 1.3.0 repository-local source mapping now exists at exact Glaze authority 8354308445da9ac35ced2b37a7f503a08a0aaf72, but residual Gallery-controlled presentation reconciliation plus fresh whole-application rendered, interaction, accessibility, adaptive/form-factor, representative-device, performance, Human Visual Excellence, rollback, release, and production acceptance remain incomplete.
     - Privacy Shield integration and acceptance are not established.
     - Wardveil Security integration and acceptance are not established.
     - Everkeep integration and complete Gallery-owned backup and recovery acceptance are not established.
