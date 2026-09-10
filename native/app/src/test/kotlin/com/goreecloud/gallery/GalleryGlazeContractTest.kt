@@ -50,11 +50,23 @@ class GalleryGlazeContractTest {
     }
 
     @Test
-    fun `adaptive gutters use governed spatial values without treating widths as Glaze device identities`() {
-        assertEquals(16, GalleryGlazeContract.horizontalGutterDp(390))
-        assertEquals(24, GalleryGlazeContract.horizontalGutterDp(820))
-        assertEquals(32, GalleryGlazeContract.horizontalGutterDp(900))
-        assertEquals(48, GalleryGlazeContract.horizontalGutterDp(1280))
+    fun `adaptive gutters consume governed spatial roles without treating widths as Glaze device identities`() {
+        assertEquals(
+            GalleryGlazeContract.SPACE_STANDARD_CLUSTER_DP,
+            GalleryGlazeContract.horizontalGutterDp(390),
+        )
+        assertEquals(
+            GalleryGlazeContract.SPACE_CONTENT_DP,
+            GalleryGlazeContract.horizontalGutterDp(820),
+        )
+        assertEquals(
+            GalleryGlazeContract.SPACE_SECTION_DP,
+            GalleryGlazeContract.horizontalGutterDp(900),
+        )
+        assertEquals(
+            GalleryGlazeContract.SPACE_REGION_DP,
+            GalleryGlazeContract.horizontalGutterDp(1280),
+        )
     }
 
     @Test
